@@ -11,11 +11,10 @@ import SwiftUI
 import UIKit
 
 extension Color {
-    static let toneLayerBlue     = Color(red: 0.376, green: 0.722, blue: 0.973)  // #60B8F8 sky blue
-    static let toneLayerBlueSoft = Color(red: 0.859, green: 0.941, blue: 0.996)  // #DBF0FF very light blue
-    // Clarity palette — matches soft butterfly logo
-    static let clarityGreen      = Color(red: 0.482, green: 0.333, blue: 0.847)  // #7B55D8 medium violet
-    static let clarityGreenSoft  = Color(red: 0.918, green: 0.898, blue: 0.980)  // #EAE5FA light lavender
+    static let toneLayerBlue     = Color(red: 0.376, green: 0.722, blue: 0.973)
+    static let toneLayerBlueSoft = Color(red: 0.859, green: 0.941, blue: 0.996)
+    static let clarityGreen      = Color(red: 0.482, green: 0.333, blue: 0.847)
+    static let clarityGreenSoft  = Color(red: 0.918, green: 0.898, blue: 0.980)
     static let appNeutral  = Color(red: 0.322, green: 0.322, blue: 0.357)
     static let appSurface  = Color(red: 0.945, green: 0.941, blue: 0.984)
     static let cardSurface = Color.white
@@ -55,7 +54,10 @@ extension View {
 struct ContentView: View {
     @State private var apiKey = ""
     @State private var draft = ""
-    @State private var audienceLens = "General ND"
+    @State private var profileADHD   = false
+    @State private var profileAutism  = false
+    @State private var profilePTSD    = false
+    @State private var profileCPTSD   = false
     @State private var goal = "Make clearer"
     @State private var isRewriting = false
     @State private var status = ""
@@ -78,8 +80,7 @@ struct ContentView: View {
     private let aiConsentKey    = "toneLayerAIProcessingConsent"
     private let appGroupID      = "group.com.alden.ndclarity"
     private var sharedDefaults: UserDefaults? { UserDefaults(suiteName: appGroupID) }
-    private let lenses    = ["General ND", "ADHD", "Autism", "PTSD / CPTSD", "Mixed"]
-    private let goals     = ["Make clearer", "Reduce anxiety", "Make actionable"]
+    private let goals      = ["Make clearer", "Reduce anxiety", "Make actionable"]
     private let resultTabs = ["Original", "Rewrite", "Tone", "Why", "Tip"]
     private let dailyTips: [(title: String, body: String)] = [
         (
@@ -128,14 +129,17 @@ struct ContentView: View {
             apiKey = sharedDefaults?.string(forKey: "claudeAPIKey")
                 ?? UserDefaults.standard.string(forKey: apiKeyKey)
                 ?? ""
-            if !apiKey.isEmpty { syncKeyboardSettings() }
             if UserDefaults.standard.object(forKey: showTeachingKey) == nil {
                 showTeaching = true
                 UserDefaults.standard.set(true, forKey: showTeachingKey)
             } else {
                 showTeaching = UserDefaults.standard.bool(forKey: showTeachingKey)
             }
-            aiConsent = UserDefaults.standard.bool(forKey: aiConsentKey)
+            aiConsent     = UserDefaults.standard.bool(forKey: aiConsentKey)
+            profileADHD   = UserDefaults.standard.bool(forKey: "ndprofile.adhd")
+            profileAutism = UserDefaults.standard.bool(forKey: "ndprofile.autism")
+            profilePTSD   = UserDefaults.standard.bool(forKey: "ndprofile.ptsd")
+            profileCPTSD  = UserDefaults.standard.bool(forKey: "ndprofile.cptsd")
             syncKeyboardSettings()
         }
         .sheet(isPresented: $showingExportSheet) {
@@ -169,7 +173,7 @@ struct ContentView: View {
 
             HStack(spacing: 10) {
                 statusPill(label: "Mode",      value: "Clarity")
-                statusPill(label: "Direction", value: "NT → ND")
+                statusPill(label: "Direction", value: "NT \u{2192} ND")
                 statusPill(label: "Live AI",   value: aiConsent && !apiKey.isEmpty ? "On" : "Local")
             }
         }
@@ -284,7 +288,7 @@ struct ContentView: View {
                     } else {
                         Image(systemName: "wand.and.stars")
                     }
-                    Text(isRewriting ? "Tuning…" : "Rewrite")
+                    Text(isRewriting ? "Tuning\u{2026}" : "Rewrite")
                         .fontWeight(.semibold)
                 }
                 .frame(maxWidth: .infinity)
@@ -331,7 +335,6 @@ struct ContentView: View {
             .background(Color.clarityGreenSoft.opacity(0.95))
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
-            // Teaching card — always opens after every rewrite; X only dismisses for this result
             if hasOutput && showTeaching {
                 if showTeachingForResult {
                     teachingCard
@@ -445,17 +448,25 @@ struct ContentView: View {
     private var optionsCard: some View {
         DisclosureGroup(isExpanded: $showingOptions) {
             VStack(alignment: .leading, spacing: 18) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Label("Audience Lens", systemImage: "person.2")
+
+                // ND Profile checkboxes
+                VStack(alignment: .leading, spacing: 10) {
+                    Label("ND Profile", systemImage: "person.2")
                         .font(.headline)
-                    Picker("Audience Lens", selection: $audienceLens) {
-                        ForEach(lenses, id: \.self) { Text($0).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                    .onChange(of: audienceLens) { _, _ in syncKeyboardSettings() }
-                    Text("Default to General ND unless you know which lens is appropriate.")
+                    Text("Check all that apply. Leaving all unchecked uses General ND.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                        profileCheckbox("ADHD",   isOn: $profileADHD)
+                        profileCheckbox("Autism", isOn: $profileAutism)
+                        profileCheckbox("PTSD",   isOn: $profilePTSD)
+                        profileCheckbox("CPTSD",  isOn: $profileCPTSD)
+                    }
+                    if profileAutism && profileADHD {
+                        Label("AUDHD profile active", systemImage: "checkmark.circle.fill")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Color.clarityGreen)
+                    }
                 }
 
                 HStack(alignment: .top, spacing: 12) {
@@ -521,12 +532,38 @@ struct ContentView: View {
         .glassCard(tint: .appNeutral, cornerRadius: 18)
     }
 
+    private func profileCheckbox(_ label: String, isOn: Binding<Bool>) -> some View {
+        Button {
+            isOn.wrappedValue.toggle()
+            syncKeyboardSettings()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: isOn.wrappedValue ? "checkmark.square.fill" : "square")
+                    .foregroundStyle(isOn.wrappedValue ? Color.clarityGreen : Color.secondary)
+                    .font(.body)
+                Text(label)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.primary)
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(isOn.wrappedValue ? Color.clarityGreenSoft : Color(.tertiarySystemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(isOn.wrappedValue ? Color.clarityGreen.opacity(0.4) : Color.clear, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
     private var messageLengthNotice: some View {
         let words = draft.trimmingCharacters(in: .whitespacesAndNewlines)
             .split { $0.isWhitespace || $0.isNewline }
             .count
         let chars = draft.count
-        return Text("\(chars) chars • \(words) words")
+        return Text("\(chars) chars \u{2022} \(words) words")
             .font(.caption)
             .foregroundStyle(.secondary)
     }
@@ -579,18 +616,47 @@ struct ContentView: View {
     }
 
     private func syncKeyboardSettings() {
-        sharedDefaults?.set(apiKey,       forKey: "claudeAPIKey")
-        sharedDefaults?.set(showTeaching, forKey: "showExplanation")
-        sharedDefaults?.set("Clarity",    forKey: "keyboardMode")
-        sharedDefaults?.set(normalizedKeyboardProfile(audienceLens), forKey: "selectedProfile")
+        UserDefaults.standard.set(profileADHD,   forKey: "ndprofile.adhd")
+        UserDefaults.standard.set(profileAutism, forKey: "ndprofile.autism")
+        UserDefaults.standard.set(profilePTSD,   forKey: "ndprofile.ptsd")
+        UserDefaults.standard.set(profileCPTSD,  forKey: "ndprofile.cptsd")
+        sharedDefaults?.set(apiKey,         forKey: "claudeAPIKey")
+        sharedDefaults?.set(showTeaching,   forKey: "showExplanation")
+        sharedDefaults?.set("Clarity",      forKey: "keyboardMode")
+        sharedDefaults?.set(buildProfileString(), forKey: "selectedProfile")
+        sharedDefaults?.set(profileADHD,    forKey: "ndprofile.adhd")
+        sharedDefaults?.set(profileAutism,  forKey: "ndprofile.autism")
+        sharedDefaults?.set(profilePTSD,    forKey: "ndprofile.ptsd")
+        sharedDefaults?.set(profileCPTSD,   forKey: "ndprofile.cptsd")
         sharedDefaults?.synchronize()
     }
 
-    private func normalizedKeyboardProfile(_ lens: String) -> String {
-        switch lens {
-        case "General ND", "Mixed": return "Mixed / Not Sure"
-        default: return lens
+    private func buildProfileString() -> String {
+        var p: [String] = []
+        if profileADHD   { p.append("ADHD") }
+        if profileAutism { p.append("Autism") }
+        if profilePTSD   { p.append("PTSD") }
+        if profileCPTSD  { p.append("CPTSD") }
+        return p.isEmpty ? "General ND" : p.joined(separator: ", ")
+    }
+
+    private func buildProfileInstructions() -> String {
+        var parts: [String] = []
+        if profileADHD {
+            parts.append("ADHD: reduce working-memory load, put priority and next action first, make urgency explicit, avoid buried asks and long multi-step wording.")
         }
+        if profileAutism {
+            parts.append("Autism: make meaning fully literal, remove all social subtext and implied expectations, define every vague phrase (soon, later, we should talk), state the ask directly.")
+        }
+        if profilePTSD {
+            parts.append("PTSD: lower all threat signals, add reassurance where appropriate, avoid vague warnings or power-heavy phrasing, make emotional stakes explicit and calm.")
+        }
+        if profileCPTSD {
+            parts.append("CPTSD: avoid language implying punishment, withdrawal, or conditional approval. Be warm, non-threatening, and explicit about safety and intent. Address fawn and freeze response patterns.")
+        }
+        return parts.isEmpty
+            ? "General ND: remove all ambiguity, make the ask explicit, add necessary context, state urgency, and give a concrete next step."
+            : parts.joined(separator: " ")
     }
 
     private func recordSatisfaction(helpful: Bool) {
@@ -735,24 +801,20 @@ struct ContentView: View {
         You are ToneLayer Clarity, a communication assistant for neurotypical senders who want their message to be easier for neurodivergent people to understand.
 
         Direction: NT-to-ND.
-        Audience lens: \(audienceLens)
+        ND Profile: \(buildProfileString())
         Goal: \(goal)
 
         Your job is to identify hidden assumptions, vague phrasing, unclear urgency, implied expectations, accidental threat signals, and missing next steps. Do not diagnose the recipient. Do not shame the sender. Be concise, practical, specific, and teach the sender one reusable communication principle.
 
-        General ND: remove ambiguity, make the ask explicit, add necessary context, state urgency, and give a concrete next step.
-        ADHD: reduce working-memory load, make priority and next action obvious, avoid buried asks and long multi-step wording.
-        Autism: make meaning literal, remove social subtext, state expectations directly, avoid vague phrases like \"soon\", \"later\", \"we should talk\", or \"whatever works\" unless defined.
-        PTSD / CPTSD: reduce threat signals, add reassurance when appropriate, avoid vague warnings, criticism without context, or power-heavy phrasing.
-        Mixed: assume overlapping ADHD, autistic, PTSD/CPTSD, and anxiety-related communication needs. Make the main point obvious first. Reduce working-memory load. Make implied meaning explicit. Remove vague timing or social hints. Lower threat signals and defensive wording. Include reassurance when appropriate. End with one clear next step.
+        \(buildProfileInstructions())
 
         Always respond with ONLY valid JSON:
         {
-          \"clearer_version\": \"the rewritten message the sender can use\",
-          \"teaching_explanation\": \"REQUIRED: plain-language explanation of how the original wording may land to the reader and why the rewrite improves clarity\",
-          \"interpretation_risk\": \"brief explanation of what the sender may sound like to an ND person and why it may be confusing, threatening, vague, or hard to act on\",
-          \"change_notes\": \"brief explanation of what changed and why\",
-          \"learning_takeaway\": \"one reusable rule the NT sender can remember next time, written plainly\"
+          "clearer_version": "the rewritten message the sender can use",
+          "teaching_explanation": "REQUIRED: plain-language explanation of how the original wording may land to the reader and why the rewrite improves clarity",
+          "interpretation_risk": "brief explanation of what the sender may sound like to an ND person and why it may be confusing, threatening, vague, or hard to act on",
+          "change_notes": "brief explanation of what changed and why",
+          "learning_takeaway": "one reusable rule the NT sender can remember next time, written plainly"
         }
         """
     }

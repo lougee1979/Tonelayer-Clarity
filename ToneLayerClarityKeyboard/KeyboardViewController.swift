@@ -47,7 +47,10 @@ struct KeyboardView: View {
     private let appGroupID = "group.com.alden.ndclarity"
     private var defaults: UserDefaults? { UserDefaults(suiteName: appGroupID) }
 
-    @State private var profile            = "Autism"
+    @State private var profileADHD   = false
+    @State private var profileAutism  = false
+    @State private var profilePTSD    = false
+    @State private var profileCPTSD   = false
     @State private var level              = "Medium"
     @State private var isRewriting        = false
     @State private var status             = ""
@@ -66,6 +69,15 @@ struct KeyboardView: View {
     @State private var spiralGrammar       = ""
     @State private var spiralOriginal      = ""
     @State private var spiralOriginalCount = 0
+
+    private var activeProfiles: String {
+        var p: [String] = []
+        if profileADHD   { p.append("ADHD") }
+        if profileAutism { p.append("AUT") }
+        if profilePTSD   { p.append("PTSD") }
+        if profileCPTSD  { p.append("CPTSD") }
+        return p.isEmpty ? "General ND" : p.joined(separator: "+")
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -93,9 +105,11 @@ struct KeyboardView: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text("Clarity")
                     .font(.system(size: 11, weight: .bold))
-                Text(profile)
+                Text(activeProfiles)
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             }
             Spacer()
             VStack(spacing: 1) {
@@ -132,7 +146,6 @@ struct KeyboardView: View {
 
     private var mainPanel: some View {
         VStack(spacing: 8) {
-            // Intensity selector
             HStack(spacing: 6) {
                 ForEach(["Light", "Medium", "Strong"], id: \.self) { l in
                     Button {
@@ -418,14 +431,20 @@ struct KeyboardView: View {
     // MARK: - Load settings
 
     private func loadSettings() {
-        let p = defaults?.string(forKey: "selectedProfile") ?? "Autism"
-        switch p {
-        case "PTSD":          profile = "PTSD / CPTSD"
-        case "PTSD + ADHD":   profile = "ADHD + PTSD"
-        case "PTSD + Autism": profile = "Autism + PTSD"
-        case "Mixed":         profile = "Mixed / Not Sure"
-        default:              profile = p
+        profileADHD   = defaults?.bool(forKey: "ndprofile.adhd")   ?? false
+        profileAutism = defaults?.bool(forKey: "ndprofile.autism") ?? false
+        profilePTSD   = defaults?.bool(forKey: "ndprofile.ptsd")   ?? false
+        profileCPTSD  = defaults?.bool(forKey: "ndprofile.cptsd")  ?? false
+
+        // Fallback: parse legacy selectedProfile string
+        if !profileADHD && !profileAutism && !profilePTSD && !profileCPTSD {
+            let p = defaults?.string(forKey: "selectedProfile") ?? ""
+            if p.contains("ADHD")                    { profileADHD   = true }
+            if p.contains("Autism") || p.contains("AUT") { profileAutism = true }
+            if p.contains("PTSD")                    { profilePTSD   = true }
+            if p.contains("CPTSD")                   { profileCPTSD  = true }
         }
+
         let stored = defaults?.string(forKey: "rewriteLevel") ?? "Medium"
         level = ["Light", "Medium", "Strong"].contains(stored) ? stored : "Medium"
         spiralEnabled = defaults?.object(forKey: "spiralPauseEnabled") == nil
@@ -642,10 +661,10 @@ struct KeyboardView: View {
         return s
     }
 
-    // MARK: - System prompt (NT \u{2192} ND only)
+    // MARK: - System prompt
 
     private func buildSystem(style: String = "Rewrite") -> String {
-        let instruction = clarityInstruction(level: level, profile: profile)
+        let instruction = clarityInstruction(level: level)
         let adaptive    = adaptiveContext()
         let styleInstruction: String
         switch style {
@@ -655,7 +674,7 @@ struct KeyboardView: View {
         default:        styleInstruction = "Make the message as clear and ND-accessible as possible."
         }
         return """
-        You are ToneLayer Clarity, a communication assistant for neurotypical senders who want their message to be easier for neurodivergent people to understand. Direction: NT \u{2192} ND. Audience profile: \(profile). \(instruction) \(styleInstruction)\(adaptive)
+        You are ToneLayer Clarity, a communication assistant for neurotypical senders who want their message to be easier for neurodivergent people to understand. Direction: NT \u{2192} ND. ND Profile: \(activeProfiles). \(instruction) \(styleInstruction)\(adaptive)
 
         Rewrite the entire text so it is explicit, concrete, low-threat, and easy for a neurodivergent reader to parse. Identify hidden assumptions, vague phrasing, unclear urgency, implied expectations, accidental threat signals, and missing next steps. Do not diagnose the reader. Do not shame the sender. Preserve the sender's intended meaning while making the topic, timing, tone, and requested action clear.
 
@@ -679,26 +698,25 @@ struct KeyboardView: View {
         return "\n\nRecurring patterns flagged for this recipient: \(list). Pay special attention to these."
     }
 
-    // MARK: - Clarity instructions (NT \u{2192} ND)
+    // MARK: - Clarity instructions
 
-    private func clarityInstruction(level: String, profile: String) -> String {
-        let profileInstruction: String
-        switch profile {
-        case "ADHD":
-            profileInstruction = "For ADHD: reduce working-memory load, put the priority first, make the next action obvious, define timing explicitly, and avoid burying the ask in context."
-        case "Autism":
-            profileInstruction = "For Autism: make meaning fully literal, remove social subtext and implied expectations, define every vague phrase (soon, later, we should talk), and state the ask directly."
-        case "PTSD / CPTSD":
-            profileInstruction = "For PTSD/CPTSD: lower all threat signals, add reassurance where appropriate, avoid vague warnings or criticism without context, and make the emotional stakes explicit and calm."
-        case "ADHD + PTSD", "PTSD + ADHD":
-            profileInstruction = "For ADHD + PTSD: lead with reassurance and the main point, define urgency, reduce working-memory load, remove threat signals, and end with one concrete next step."
-        case "Autism + PTSD", "PTSD + Autism":
-            profileInstruction = "For Autism + PTSD: use fully literal wording, reduce social subtext, lower threat signals, clarify every expectation, and separate facts from feelings or requests."
-        case "Mixed / Not Sure", "Mixed":
-            profileInstruction = "For Mixed / Not Sure: assume overlapping ADHD, autistic, and PTSD/CPTSD needs. Make the main point obvious, reduce working-memory load, make implied meaning explicit, lower threat signals, and end with one clear next step."
-        default:
-            profileInstruction = "Use a broad ND-accessibility lens: remove all ambiguity, name urgency clearly, make the ask explicit, add necessary context, and give a concrete next step."
+    private func clarityInstruction(level: String) -> String {
+        var profileParts: [String] = []
+        if profileADHD {
+            profileParts.append("ADHD: reduce working-memory load, put priority first, make next action obvious, define timing explicitly, avoid buried asks.")
         }
+        if profileAutism {
+            profileParts.append("Autism: make meaning fully literal, remove social subtext, define every vague phrase (soon, later, we should talk), state the ask directly.")
+        }
+        if profilePTSD {
+            profileParts.append("PTSD: lower all threat signals, add reassurance where appropriate, avoid vague warnings or criticism without context, make emotional stakes explicit and calm.")
+        }
+        if profileCPTSD {
+            profileParts.append("CPTSD: avoid language implying punishment, withdrawal, or conditional approval. Be warm, non-threatening, and explicit about safety. Address fawn and freeze response patterns.")
+        }
+        let profileInstruction = profileParts.isEmpty
+            ? "General ND: remove all ambiguity, make the ask explicit, add necessary context, state urgency, and give a concrete next step."
+            : profileParts.joined(separator: " ")
 
         let intensityInstruction: String
         switch level {
@@ -717,7 +735,7 @@ struct KeyboardView: View {
     private func saveLog(original: String, result: ClaudeResult) {
         let entry = RewriteEntry(
             id: UUID(), timestamp: Date(),
-            profile: profile, mode: level,
+            profile: activeProfiles, mode: level,
             originalText: original, rewrittenText: result.rewrite,
             explanation: result.explanation,
             distortions: result.distortions, spiraling: result.isSpiraling
