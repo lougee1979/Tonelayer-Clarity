@@ -69,7 +69,6 @@ struct ContentView: View {
     @State private var selectedResult = "Rewrite"
     @State private var showingOptions = false
     @State private var showTeaching = true
-    @State private var showTeachingForResult = false
     @State private var aiConsent = false
     @State private var exportURL: URL?
     @State private var activityItems: [Any] = []
@@ -118,6 +117,7 @@ struct ContentView: View {
             VStack(spacing: 20) {
                 headerCard
                 dailyTipCard
+                teachingCard
                 composerCard
                 optionsCard
             }
@@ -223,6 +223,58 @@ struct ContentView: View {
     private var todayTip: (title: String, body: String) {
         let day = Calendar.current.ordinality(of: .day, in: .year, for: Date()) ?? 1
         return dailyTips[(day - 1) % dailyTips.count]
+    }
+
+    // Teaching card — always visible unless toggled off in Options
+    private var teachingCard: some View {
+        Group {
+            if showTeaching {
+                VStack(alignment: .leading, spacing: 12) {
+                    Label("How this lands", systemImage: "lightbulb.fill")
+                        .font(.headline)
+                        .foregroundStyle(Color.clarityGreen)
+
+                    if hasOutput {
+                        if !teachingExplanation.isEmpty {
+                            Text(teachingExplanation)
+                                .font(.body)
+                                .foregroundStyle(Color.primary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        if !learningTakeaway.isEmpty {
+                            HStack(alignment: .top, spacing: 10) {
+                                Image(systemName: "arrow.right.circle.fill")
+                                    .foregroundStyle(Color.clarityGreen)
+                                    .font(.subheadline)
+                                    .padding(.top, 2)
+                                Text(learningTakeaway)
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(Color.primary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(12)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.clarityGreenSoft)
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        }
+                    } else {
+                        Text("Paste a message and tap Rewrite to see how it may land for a neurodivergent reader.")
+                            .font(.body)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(16)
+                .background(Color.clarityGreenSoft.opacity(0.5))
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(Color.clarityGreen.opacity(0.25), lineWidth: 1)
+                )
+            }
+        }
     }
 
     private var composerCard: some View {
@@ -335,21 +387,6 @@ struct ContentView: View {
             .background(Color.clarityGreenSoft.opacity(0.95))
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
-            if hasOutput && showTeaching {
-                if showTeachingForResult {
-                    teachingCard
-                } else {
-                    Button {
-                        withAnimation { showTeachingForResult = true }
-                    } label: {
-                        Label("Show teaching explanation", systemImage: "lightbulb")
-                            .font(.caption)
-                            .foregroundStyle(Color.clarityGreen)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-
             if hasOutput {
                 HStack(spacing: 10) {
                     Button { copySelectedResult() } label: {
@@ -394,62 +431,10 @@ struct ContentView: View {
         .glassCard(tint: .clarityGreen, cornerRadius: 18)
     }
 
-    private var teachingCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Label("How this lands", systemImage: "lightbulb.fill")
-                    .font(.headline)
-                    .foregroundStyle(Color.clarityGreen)
-                Spacer()
-                Button {
-                    withAnimation { showTeachingForResult = false }
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(Color.secondary.opacity(0.6))
-                        .font(.body)
-                }
-                .buttonStyle(.plain)
-            }
-
-            if !teachingExplanation.isEmpty {
-                Text(teachingExplanation)
-                    .font(.body)
-                    .foregroundStyle(Color.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            if !learningTakeaway.isEmpty {
-                HStack(alignment: .top, spacing: 10) {
-                    Image(systemName: "arrow.right.circle.fill")
-                        .foregroundStyle(Color.clarityGreen)
-                        .font(.subheadline)
-                        .padding(.top, 2)
-                    Text(learningTakeaway)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Color.primary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.clarityGreenSoft)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(Color.clarityGreenSoft.opacity(0.5))
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.clarityGreen.opacity(0.25), lineWidth: 1)
-        )
-    }
-
     private var optionsCard: some View {
         DisclosureGroup(isExpanded: $showingOptions) {
             VStack(alignment: .leading, spacing: 18) {
 
-                // ND Profile checkboxes
                 VStack(alignment: .leading, spacing: 10) {
                     Label("ND Profile", systemImage: "person.2")
                         .font(.headline)
@@ -473,7 +458,7 @@ struct ContentView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Label("Teaching explanations", systemImage: "lightbulb")
                             .font(.headline)
-                        Text("Show how the message may sound and what to learn for next time.")
+                        Text("Show how the message may land and what to learn for next time.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -483,7 +468,6 @@ struct ContentView: View {
                         .onChange(of: showTeaching) { _, newValue in
                             UserDefaults.standard.set(newValue, forKey: showTeachingKey)
                             syncKeyboardSettings()
-                            if !newValue { showTeachingForResult = false }
                         }
                 }
 
@@ -671,7 +655,6 @@ struct ContentView: View {
         changeNotes = ""
         learningTakeaway = ""
         teachingExplanation = ""
-        showTeachingForResult = false
         status = ""
     }
 
@@ -709,7 +692,6 @@ struct ContentView: View {
         }
 
         isRewriting = true
-        showTeachingForResult = false
         incrementMetric("rewrite.requested")
         status = "Checking message..."
         selectedResult = "Rewrite"
@@ -718,14 +700,13 @@ struct ContentView: View {
             do {
                 let result = try await callClaude(text: input)
                 await MainActor.run {
-                    clearerVersion     = result.clearerVersion
-                    interpretationRisk = result.interpretationRisk
-                    changeNotes        = result.changeNotes
-                    learningTakeaway   = result.learningTakeaway
+                    clearerVersion      = result.clearerVersion
+                    interpretationRisk  = result.interpretationRisk
+                    changeNotes         = result.changeNotes
+                    learningTakeaway    = result.learningTakeaway
                     teachingExplanation = result.teachingExplanation
                     incrementMetric("rewrite.success")
                     isRewriting = false
-                    showTeachingForResult = showTeaching
                     status = "Ready"
                 }
             } catch {
@@ -754,10 +735,10 @@ struct ContentView: View {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.timeoutInterval = 90
         req.httpBody = try JSONSerialization.data(withJSONObject: [
-            "model":    "claude-haiku-4-5-20251001",
+            "model":      "claude-haiku-4-5-20251001",
             "max_tokens": 4096,
-            "system":   buildSystemPrompt(),
-            "messages": [["role": "user", "content": "Message:\n\(text)\n\nReply with ONLY valid JSON."]],
+            "system":     buildSystemPrompt(),
+            "messages":   [["role": "user", "content": "Message:\n\(text)\n\nReply with ONLY valid JSON."]],
         ])
 
         let (data, response) = try await URLSession.shared.data(for: req)
@@ -786,10 +767,10 @@ struct ContentView: View {
         }
 
         return ClarityResult(
-            clearerVersion:     parsed["clearer_version"]      as? String ?? "",
-            interpretationRisk: parsed["interpretation_risk"]  as? String ?? "",
-            changeNotes:        parsed["change_notes"]         as? String ?? "",
-            learningTakeaway:   parsed["learning_takeaway"]    as? String ?? "",
+            clearerVersion:      parsed["clearer_version"]      as? String ?? "",
+            interpretationRisk:  parsed["interpretation_risk"]  as? String ?? "",
+            changeNotes:         parsed["change_notes"]         as? String ?? "",
+            learningTakeaway:    parsed["learning_takeaway"]    as? String ?? "",
             teachingExplanation: parsed["teaching_explanation"] as? String
                 ?? parsed["explanation"] as? String
                 ?? ""
@@ -841,9 +822,9 @@ enum ClarityError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .apiFailed(let code):    return "API failed (HTTP \(code))"
+        case .apiFailed(let code):     return "API failed (HTTP \(code))"
         case .apiMessage(let message): return message
-        case .badResponse:            return "Unexpected API response"
+        case .badResponse:             return "Unexpected API response"
         }
     }
 }
