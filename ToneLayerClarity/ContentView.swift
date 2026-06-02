@@ -56,6 +56,7 @@ struct ContentView: View {
     @State private var draft = ""
     @State private var profileADHD   = false
     @State private var profileAutism  = false
+    @State private var profileAUDHD   = false
     @State private var profilePTSD    = false
     @State private var profileCPTSD   = false
     @State private var goal = "Make clearer"
@@ -80,7 +81,7 @@ struct ContentView: View {
     private let appGroupID      = "group.com.alden.ndclarity"
     private var sharedDefaults: UserDefaults? { UserDefaults(suiteName: appGroupID) }
     private let goals      = ["Make clearer", "Reduce anxiety", "Make actionable"]
-    private let resultTabs = ["Original", "Rewrite", "Tone", "Why", "Tip"]
+    private let resultTabs = ["Original", "Rewrite", "Tone"]
     private let dailyTips: [(title: String, body: String)] = [
         (
             "A blocked call may not feel neutral",
@@ -117,8 +118,8 @@ struct ContentView: View {
             VStack(spacing: 20) {
                 headerCard
                 dailyTipCard
-                teachingCard
                 composerCard
+                teachingCard
                 optionsCard
             }
             .padding()
@@ -129,15 +130,15 @@ struct ContentView: View {
             apiKey = sharedDefaults?.string(forKey: "claudeAPIKey")
                 ?? UserDefaults.standard.string(forKey: apiKeyKey)
                 ?? ""
-            if UserDefaults.standard.object(forKey: showTeachingKey) == nil {
-                showTeaching = true
-                UserDefaults.standard.set(true, forKey: showTeachingKey)
-            } else {
+            showTeaching = true
+            if UserDefaults.standard.object(forKey: showTeachingKey) != nil {
                 showTeaching = UserDefaults.standard.bool(forKey: showTeachingKey)
             }
+            UserDefaults.standard.set(showTeaching, forKey: showTeachingKey)
             aiConsent     = UserDefaults.standard.bool(forKey: aiConsentKey)
             profileADHD   = UserDefaults.standard.bool(forKey: "ndprofile.adhd")
             profileAutism = UserDefaults.standard.bool(forKey: "ndprofile.autism")
+            profileAUDHD  = UserDefaults.standard.bool(forKey: "ndprofile.audhd")
             profilePTSD   = UserDefaults.standard.bool(forKey: "ndprofile.ptsd")
             profileCPTSD  = UserDefaults.standard.bool(forKey: "ndprofile.cptsd")
             syncKeyboardSettings()
@@ -225,11 +226,12 @@ struct ContentView: View {
         return dailyTips[(day - 1) % dailyTips.count]
     }
 
-    // Teaching card — always visible unless toggled off in Options
+    // Teaching card \u{2014} always visible below the result, never a tab
+    // Only hidden when toggled off in Options
     private var teachingCard: some View {
         Group {
             if showTeaching {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 14) {
                     Label("How this lands", systemImage: "lightbulb.fill")
                         .font(.headline)
                         .foregroundStyle(Color.clarityGreen)
@@ -240,6 +242,30 @@ struct ContentView: View {
                                 .font(.body)
                                 .foregroundStyle(Color.primary)
                                 .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        if !interpretationRisk.isEmpty {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("How this may sound:")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                Text(interpretationRisk)
+                                    .font(.subheadline)
+                                    .foregroundStyle(Color.primary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+
+                        if !changeNotes.isEmpty {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("What changed:")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                Text(changeNotes)
+                                    .font(.subheadline)
+                                    .foregroundStyle(Color.primary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         }
 
                         if !learningTakeaway.isEmpty {
@@ -259,7 +285,7 @@ struct ContentView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                         }
                     } else {
-                        Text("Paste a message and tap Rewrite to see how it may land for a neurodivergent reader.")
+                        Text("Paste a message above and tap Rewrite to see how it may land for a neurodivergent reader.")
                             .font(.body)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -438,17 +464,18 @@ struct ContentView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     Label("ND Profile", systemImage: "person.2")
                         .font(.headline)
-                    Text("Check all that apply. Leaving all unchecked uses General ND.")
+                    Text("Check all that apply. AUDHD = ADHD + Autism combined. Combinations build the AI instructions automatically.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
                         profileCheckbox("ADHD",   isOn: $profileADHD)
                         profileCheckbox("Autism", isOn: $profileAutism)
+                        profileCheckbox("AUDHD",  isOn: $profileAUDHD)
                         profileCheckbox("PTSD",   isOn: $profilePTSD)
                         profileCheckbox("CPTSD",  isOn: $profileCPTSD)
                     }
-                    if profileAutism && profileADHD {
-                        Label("AUDHD profile active", systemImage: "checkmark.circle.fill")
+                    if buildProfileString() != "General ND" {
+                        Label("Active: \(buildProfileString())", systemImage: "checkmark.circle.fill")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(Color.clarityGreen)
                     }
@@ -458,7 +485,7 @@ struct ContentView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Label("Teaching explanations", systemImage: "lightbulb")
                             .font(.headline)
-                        Text("Show how the message may land and what to learn for next time.")
+                        Text("Show the teaching card below the rewrite. Turn off only when you want rewrites without explanations.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -560,8 +587,6 @@ struct ContentView: View {
         switch selectedResult {
         case "Original": return draft
         case "Tone":     return interpretationRisk
-        case "Why":      return teachingWindowText
-        case "Tip":      return learningTakeaway
         default:         return clearerVersion
         }
     }
@@ -571,17 +596,6 @@ struct ContentView: View {
         guard hasOutput else { return "Tap Rewrite to see the rewritten version here." }
         let text = selectedResultText
         return text.isEmpty ? "Nothing to show for this tab yet." : text
-    }
-
-    private var teachingWindowText: String {
-        guard showTeaching else { return "Teaching explanations are turned off in Options." }
-        guard hasOutput else { return "After a rewrite, this explains how the message may land and why the wording changed." }
-        var parts: [String] = []
-        if !teachingExplanation.isEmpty { parts.append(teachingExplanation) }
-        if !interpretationRisk.isEmpty  { parts.append("How this may sound:\n\(interpretationRisk)") }
-        if !changeNotes.isEmpty         { parts.append("What changed:\n\(changeNotes)") }
-        if !learningTakeaway.isEmpty    { parts.append("Learn:\n\(learningTakeaway)") }
-        return parts.isEmpty ? "No teaching note returned for this rewrite." : parts.joined(separator: "\n\n")
     }
 
     private func pasteFromClipboard() {
@@ -602,6 +616,7 @@ struct ContentView: View {
     private func syncKeyboardSettings() {
         UserDefaults.standard.set(profileADHD,   forKey: "ndprofile.adhd")
         UserDefaults.standard.set(profileAutism, forKey: "ndprofile.autism")
+        UserDefaults.standard.set(profileAUDHD,  forKey: "ndprofile.audhd")
         UserDefaults.standard.set(profilePTSD,   forKey: "ndprofile.ptsd")
         UserDefaults.standard.set(profileCPTSD,  forKey: "ndprofile.cptsd")
         sharedDefaults?.set(apiKey,         forKey: "claudeAPIKey")
@@ -610,6 +625,7 @@ struct ContentView: View {
         sharedDefaults?.set(buildProfileString(), forKey: "selectedProfile")
         sharedDefaults?.set(profileADHD,    forKey: "ndprofile.adhd")
         sharedDefaults?.set(profileAutism,  forKey: "ndprofile.autism")
+        sharedDefaults?.set(profileAUDHD,   forKey: "ndprofile.audhd")
         sharedDefaults?.set(profilePTSD,    forKey: "ndprofile.ptsd")
         sharedDefaults?.set(profileCPTSD,   forKey: "ndprofile.cptsd")
         sharedDefaults?.synchronize()
@@ -617,8 +633,12 @@ struct ContentView: View {
 
     private func buildProfileString() -> String {
         var p: [String] = []
-        if profileADHD   { p.append("ADHD") }
-        if profileAutism { p.append("Autism") }
+        if profileAUDHD {
+            p.append("AUDHD")
+        } else {
+            if profileADHD   { p.append("ADHD") }
+            if profileAutism { p.append("Autism") }
+        }
         if profilePTSD   { p.append("PTSD") }
         if profileCPTSD  { p.append("CPTSD") }
         return p.isEmpty ? "General ND" : p.joined(separator: ", ")
@@ -626,11 +646,15 @@ struct ContentView: View {
 
     private func buildProfileInstructions() -> String {
         var parts: [String] = []
-        if profileADHD {
-            parts.append("ADHD: reduce working-memory load, put priority and next action first, make urgency explicit, avoid buried asks and long multi-step wording.")
-        }
-        if profileAutism {
-            parts.append("Autism: make meaning fully literal, remove all social subtext and implied expectations, define every vague phrase (soon, later, we should talk), state the ask directly.")
+        if profileAUDHD || (profileADHD && profileAutism) {
+            parts.append("AUDHD: combine ADHD and Autism communication traits \u{2014} put priority and next action first, use ultra-literal language, eliminate all social subtext and implied expectations, define every vague phrase (soon, later, we should talk), reduce working-memory load, make urgency and the ask fully explicit.")
+        } else {
+            if profileADHD {
+                parts.append("ADHD: reduce working-memory load, put priority and next action first, make urgency explicit, avoid buried asks and long multi-step wording.")
+            }
+            if profileAutism {
+                parts.append("Autism: make meaning fully literal, remove all social subtext and implied expectations, define every vague phrase (soon, later, we should talk), state the ask directly.")
+            }
         }
         if profilePTSD {
             parts.append("PTSD: lower all threat signals, add reassurance where appropriate, avoid vague warnings or power-heavy phrasing, make emotional stakes explicit and calm.")
@@ -791,11 +815,11 @@ struct ContentView: View {
 
         Always respond with ONLY valid JSON:
         {
-          "clearer_version": "the rewritten message the sender can use",
-          "teaching_explanation": "REQUIRED: plain-language explanation of how the original wording may land to the reader and why the rewrite improves clarity",
-          "interpretation_risk": "brief explanation of what the sender may sound like to an ND person and why it may be confusing, threatening, vague, or hard to act on",
-          "change_notes": "brief explanation of what changed and why",
-          "learning_takeaway": "one reusable rule the NT sender can remember next time, written plainly"
+          \"clearer_version\": \"the rewritten message the sender can use\",
+          \"teaching_explanation\": \"REQUIRED: plain-language explanation of how the original wording may land to the reader and why the rewrite improves clarity\",
+          \"interpretation_risk\": \"brief explanation of what the sender may sound like to an ND person and why it may be confusing, threatening, vague, or hard to act on\",
+          \"change_notes\": \"brief explanation of what changed and why\",
+          \"learning_takeaway\": \"one reusable rule the NT sender can remember next time, written plainly\"
         }
         """
     }
