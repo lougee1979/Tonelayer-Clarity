@@ -817,12 +817,18 @@ struct ContentView: View {
                     Text(isDecoding ? "Decoding\u{2026}" : "Decode").fontWeight(.semibold)
                 }
                 .frame(maxWidth: .infinity).padding(.vertical, 14)
-                .background(isDecoding || decodeText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    ? Color(red: 0.10, green: 0.36, blue: 0.86).opacity(0.45)
-                    : Color(red: 0.10, green: 0.36, blue: 0.86))
+                .background(isDecoding ? Color(red: 0.10, green: 0.36, blue: 0.86).opacity(0.45) : Color(red: 0.10, green: 0.36, blue: 0.86))
                 .foregroundStyle(.white).clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            }.disabled(isDecoding || decodeText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            if !decodeStatus.isEmpty { Text(decodeStatus).font(.caption).foregroundStyle(.secondary) }
+            }.disabled(isDecoding)
+            if !decodeStatus.isEmpty {
+                Text(decodeStatus)
+                    .font(.subheadline)
+                    .foregroundStyle(decodeStatus.contains("…") ? Color.secondary : Color.red)
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(decodeStatus.contains("…") ? Color.clear : Color.red.opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
             if !decodeTranslation.isEmpty { decodeResultsView }
         }
         .padding(20).glassCard(tint: Color(red: 0.10, green: 0.36, blue: 0.86), cornerRadius: 18)
@@ -868,6 +874,14 @@ struct ContentView: View {
     }
 
     private func startDecode() {
+        if decodeText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if let clip = UIPasteboard.general.string, !clip.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                decodeText = clip
+            } else {
+                decodeStatus = "Nothing to decode — copy a message first."
+                return
+            }
+        }
         let text = decodeText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         isDecoding = true; decodeStatus = "Decoding\u{2026}"
