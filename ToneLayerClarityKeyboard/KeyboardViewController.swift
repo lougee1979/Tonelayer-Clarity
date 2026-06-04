@@ -46,6 +46,8 @@ struct KeyboardView: View {
 
     private let appGroupID = "group.com.alden.ndclarity"
     private var defaults: UserDefaults? { UserDefaults(suiteName: appGroupID) }
+    private let serverURL = "https://tonelayer.app/rewrite"
+    private let appToken  = "d731136d97cdd46453e7581465537e0d9aee811512b885c2"
 
     @State private var profileADHD   = false
     @State private var profileAutism  = false
@@ -486,7 +488,7 @@ struct KeyboardView: View {
 
         Task {
             do {
-                let result = try await callClaude(text: full, style: style)
+                let result = try await callServer(text: full, style: style)
                 await MainActor.run {
                     isRewriting = false
                     defaults?.set(false, forKey: "keyboardRewriteInProgress")
@@ -579,7 +581,7 @@ struct KeyboardView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { status = "" }
     }
 
-    // MARK: - Claude API
+    // MARK: - Server API
 
     struct ClaudeResult {
         let rewrite: String
@@ -589,145 +591,48 @@ struct KeyboardView: View {
         var isSpiraling: Bool { !distortions.isEmpty }
     }
 
-    private func callClaude(text: String, style: String = "Rewrite") async throws -> ClaudeResult {
-        guard let apiKey = defaults?.string(forKey: "claudeAPIKey"), !apiKey.isEmpty else {
-            throw NBError.noKey
-        }
-        let system = buildSystem(style: style)
-        let prompt = "Text:\n\(text)\n\nReply with ONLY valid JSON."
-
-        var req = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
+    private func callServer(text: String, style: String = "Clarify") async throws -> ClaudeResult {
+        let mode = "clarity"
+        let profile = activeProfiles
+        var req = URLRequest(url: URL(string: serverURL)!)
         req.httpMethod = "POST"
-        req.setValue(apiKey,             forHTTPHeaderField: "x-api-key")
-        req.setValue("2023-06-01",       forHTTPHeaderField: "anthropic-version")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(appToken,           forHTTPHeaderField: "x-app-token")
         req.timeoutInterval = 90
         req.httpBody = try JSONSerialization.data(withJSONObject: [
-            "model":      "claude-haiku-4-5-20251001",
-            "max_tokens": 8192,
-            "system":     system,
-            "messages":   [["role": "user", "content": prompt]],
+            "text":    text,
+            "profile": profile,
+            "level":   level,
+            "mode":    mode,
+            "style":   style
         ])
-
         let (data, response) = try await URLSession.shared.data(for: req)
         guard let http = response as? HTTPURLResponse else { throw NBError.apiFailed(0) }
         if http.statusCode != 200 {
-            if let errJSON = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let err = errJSON["error"] as? [String: Any],
-               let msg = err["message"] as? String {
+            if let e = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let msg = e["error"] as? String {
                 throw NBError.apiMessage("\(http.statusCode): \(msg.prefix(120))")
             }
             throw NBError.apiFailed(http.statusCode)
         }
-        guard let json    = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let content = (json["content"] as? [[String: Any]])?.first?["text"] as? String
+        guard let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { throw NBError.badResponse }
-
-        let cleaned = extractJSON(from: content)
-        if let d = cleaned.data(using: .utf8),
-           let parsed = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
-            let rewrite: String
-            if let paras = parsed["paragraphs"] as? [String], !paras.isEmpty {
-                rewrite = paras.joined(separator: "\n\n")
-            } else if let r = parsed["rewrite"] as? String, !r.isEmpty {
-                rewrite = r
-            } else {
-                rewrite = ""
-            }
-            if !rewrite.isEmpty {
-                return ClaudeResult(
-                    rewrite:     rewrite,
-                    explanation: parsed["explanation"]  as? String   ?? "",
-                    distortions: parsed["distortions"]  as? [String] ?? [],
-                    grammarOnly: parsed["grammar_only"] as? String   ?? ""
-                )
-            }
+        let rewrite: String
+        if let cv = parsed["clearer_version"] as? String, !cv.isEmpty {
+            rewrite = cv
+        } else if let paras = parsed["paragraphs"] as? [String], !paras.isEmpty {
+            rewrite = paras.joined(separator: "\n\n")
+        } else if let r = parsed["rewrite"] as? String, !r.isEmpty {
+            rewrite = r
+        } else {
+            throw NBError.badResponse
         }
         return ClaudeResult(
-            rewrite: cleaned.trimmingCharacters(in: .whitespacesAndNewlines),
-            explanation: "", distortions: [], grammarOnly: ""
+            rewrite:     rewrite,
+            explanation: parsed["teaching_explanation"] as? String ?? parsed["explanation"] as? String ?? "",
+            distortions: parsed["distortions"] as? [String] ?? [],
+            grammarOnly: parsed["grammar_only"] as? String ?? ""
         )
-    }
-
-    private func extractJSON(from raw: String) -> String {
-        var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        if s.hasPrefix("```") {
-            if let firstNL = s.firstIndex(of: "\n") { s = String(s[s.index(after: firstNL)...]) }
-            if s.hasSuffix("```") { s = String(s.dropLast(3)).trimmingCharacters(in: .whitespacesAndNewlines) }
-        }
-        if let open = s.firstIndex(of: "{"), let close = s.lastIndex(of: "}"), open < close {
-            return String(s[open...close])
-        }
-        return s
-    }
-
-    // MARK: - System prompt
-
-    private func buildSystem(style: String = "Rewrite") -> String {
-        let instruction = clarityInstruction(level: level)
-        let adaptive    = adaptiveContext()
-        let styleInstruction: String
-        switch style {
-        case "Shorter": styleInstruction = "Make the rewrite shorter and more concise while keeping all essential meaning clear."
-        case "Warmer":  styleInstruction = "Make the rewrite warmer and lower-threat, with reassurance where helpful."
-        case "Direct":  styleInstruction = "Make the rewrite more explicit and direct \u{2014} name every expectation and ask plainly."
-        default:        styleInstruction = "Make the message as clear and ND-accessible as possible."
-        }
-        return """
-        You are ToneLayer Clarity, a communication assistant for neurotypical senders who want their message to be easier for neurodivergent people to understand. Direction: NT \u{2192} ND. ND Profile: \(activeProfiles). \(instruction) \(styleInstruction)\(adaptive)
-
-        Rewrite the entire text so it is explicit, concrete, low-threat, and easy for a neurodivergent reader to parse. Identify hidden assumptions, vague phrasing, unclear urgency, implied expectations, accidental threat signals, and missing next steps. Do not diagnose the reader. Do not shame the sender. Preserve the sender's intended meaning while making the topic, timing, tone, and requested action clear.
-
-        The "paragraphs" array is the primary output. For any text longer than 3 sentences, you MUST return at least 2 paragraphs \u{2014} never collapse everything into a single string. Multi-topic messages must always be broken into multiple paragraphs.
-
-        Always respond with ONLY valid JSON \u{2014} no markdown, no code fences, no extra text.
-
-        {
-          "paragraphs": ["first paragraph as a plain string", "second paragraph as a plain string if needed"],
-          "explanation": "REQUIRED: one sentence explaining what hidden assumption, vague wording, threat signal, or missing next step you addressed and why the rewrite is easier for ND readers.",
-          "distortions": [],
-          "grammar_only": "grammar-fixed version of the full original."
-        }
-        """
-    }
-
-    private func adaptiveContext() -> String {
-        let patterns = LogStore.shared.topPatterns()
-        guard !patterns.isEmpty else { return "" }
-        let list = patterns.map { "\($0.pattern) (\($0.count)\u{d7})" }.joined(separator: ", ")
-        return "\n\nRecurring patterns flagged for this recipient: \(list). Pay special attention to these."
-    }
-
-    // MARK: - Clarity instructions
-
-    private func clarityInstruction(level: String) -> String {
-        var profileParts: [String] = []
-        if profileADHD {
-            profileParts.append("ADHD: reduce working-memory load, put priority first, make next action obvious, define timing explicitly, avoid buried asks.")
-        }
-        if profileAutism {
-            profileParts.append("Autism: make meaning fully literal, remove social subtext, define every vague phrase (soon, later, we should talk), state the ask directly.")
-        }
-        if profilePTSD {
-            profileParts.append("PTSD: lower all threat signals, add reassurance where appropriate, avoid vague warnings or criticism without context, make emotional stakes explicit and calm.")
-        }
-        if profileCPTSD {
-            profileParts.append("CPTSD: avoid language implying punishment, withdrawal, or conditional approval. Be warm, non-threatening, and explicit about safety. Address fawn and freeze response patterns.")
-        }
-        let profileInstruction = profileParts.isEmpty
-            ? "General ND: remove all ambiguity, make the ask explicit, add necessary context, state urgency, and give a concrete next step."
-            : profileParts.joined(separator: " ")
-
-        let intensityInstruction: String
-        switch level {
-        case "Light":
-            intensityInstruction = "Make minimal changes. Keep the sender's voice, but define vague timing, add missing context, and make any hidden ask explicit."
-        case "Medium":
-            intensityInstruction = "Put the topic and intent first, name urgency, remove social hints, add reassurance if useful, and end with the requested action. Use multiple paragraphs to separate distinct points."
-        default:
-            intensityInstruction = "Fully translate indirect NT wording into explicit, calm, concrete ND-accessible language with low threat, clear expectations, defined timing, and one obvious next step. Break into multiple paragraphs \u{2014} one idea per paragraph."
-        }
-        return "\(profileInstruction) \(intensityInstruction)"
     }
 
     // MARK: - Log
@@ -747,13 +652,11 @@ struct KeyboardView: View {
 // MARK: - Errors
 
 enum NBError: LocalizedError {
-    case noKey
     case apiFailed(Int)
     case apiMessage(String)
     case badResponse
     var errorDescription: String? {
         switch self {
-        case .noKey:               return "No API key \u{2014} add it in the Clarity app"
         case .apiFailed(let code): return "API failed (HTTP \(code))"
         case .apiMessage(let s):   return s
         case .badResponse:         return "Unexpected API response"

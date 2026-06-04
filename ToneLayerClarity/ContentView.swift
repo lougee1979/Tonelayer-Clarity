@@ -52,7 +52,6 @@ extension View {
 }
 
 struct ContentView: View {
-    @State private var apiKey = ""
     @State private var draft = ""
     @State private var profileADHD   = false
     @State private var profileAutism  = false
@@ -75,7 +74,21 @@ struct ContentView: View {
     @State private var activityItems: [Any] = []
     @State private var showingExportSheet = false
 
-    private let apiKeyKey       = "ntClarityClaudeAPIKey"
+    // Decoder
+    @State private var decodeContactName   = ""
+    @State private var decodeText          = ""
+    @State private var decodeSensitivity   = "Low"
+    @State private var isDecoding          = false
+    @State private var decodeTranslation   = ""
+    @State private var decodePatterns: [String] = []
+    @State private var decodeBaseline      = ""
+    @State private var decodeTentative     = false
+    @State private var decodeStatus        = ""
+
+    private let serverURL = "https://tonelayer.app/rewrite"
+    private let decodeURL = "https://tonelayer.app/decode"
+    private let appToken  = "d731136d97cdd46453e7581465537e0d9aee811512b885c2"
+
     private let showTeachingKey = "ntClarityShowTeaching"
     private let aiConsentKey    = "toneLayerAIProcessingConsent"
     private let appGroupID      = "group.com.alden.ndclarity"
@@ -120,6 +133,7 @@ struct ContentView: View {
                 dailyTipCard
                 composerCard
                 teachingCard
+                decoderCard
                 optionsCard
             }
             .padding()
@@ -127,9 +141,6 @@ struct ContentView: View {
         .background(Color.appSurface)
         .preferredColorScheme(.light)
         .onAppear {
-            apiKey = sharedDefaults?.string(forKey: "claudeAPIKey")
-                ?? UserDefaults.standard.string(forKey: apiKeyKey)
-                ?? ""
             showTeaching = true
             if UserDefaults.standard.object(forKey: showTeachingKey) != nil {
                 showTeaching = UserDefaults.standard.bool(forKey: showTeachingKey)
@@ -175,7 +186,7 @@ struct ContentView: View {
             HStack(spacing: 10) {
                 statusPill(label: "Mode",      value: "Clarity")
                 statusPill(label: "Direction", value: "NT \u{2192} ND")
-                statusPill(label: "Live AI",   value: aiConsent && !apiKey.isEmpty ? "On" : "Local")
+                statusPill(label: "Server",    value: "\u{2713} tonelayer.app")
             }
         }
         .frame(maxWidth: .infinity)
@@ -514,20 +525,6 @@ struct ContentView: View {
                         }
                 }
 
-                VStack(alignment: .leading, spacing: 10) {
-                    Label("API Key", systemImage: "key.fill")
-                        .font(.headline)
-                    SecureField("sk-ant-...", text: $apiKey)
-                        .textFieldStyle(.roundedBorder)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                    Button("Save Key") {
-                        UserDefaults.standard.set(apiKey, forKey: apiKeyKey)
-                        syncKeyboardSettings()
-                        status = "API key saved"
-                    }
-                    .font(.subheadline.weight(.semibold))
-                }
             }
             .padding(.top, 12)
         } label: {
@@ -619,7 +616,6 @@ struct ContentView: View {
         UserDefaults.standard.set(profileAUDHD,  forKey: "ndprofile.audhd")
         UserDefaults.standard.set(profilePTSD,   forKey: "ndprofile.ptsd")
         UserDefaults.standard.set(profileCPTSD,  forKey: "ndprofile.cptsd")
-        sharedDefaults?.set(apiKey,         forKey: "claudeAPIKey")
         sharedDefaults?.set(showTeaching,   forKey: "showExplanation")
         sharedDefaults?.set("Clarity",      forKey: "keyboardMode")
         sharedDefaults?.set(buildProfileString(), forKey: "selectedProfile")
@@ -706,15 +702,6 @@ struct ContentView: View {
     private func rewriteMessage() {
         let input = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !input.isEmpty else { return }
-        guard aiConsent else {
-            status = "Turn on AI processing consent in Options first"
-            return
-        }
-        guard !apiKey.isEmpty else {
-            status = "Add your Claude API key in Options first"
-            return
-        }
-
         isRewriting = true
         incrementMetric("rewrite.requested")
         status = "Checking message..."
@@ -722,7 +709,7 @@ struct ContentView: View {
 
         Task {
             do {
-                let result = try await callClaude(text: input)
+                let result = try await callServer(text: input)
                 await MainActor.run {
                     clearerVersion      = result.clearerVersion
                     interpretationRisk  = result.interpretationRisk
@@ -751,91 +738,186 @@ struct ContentView: View {
         let teachingExplanation: String
     }
 
-    private func callClaude(text: String) async throws -> ClarityResult {
-        var req = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
+    private func callServer(text: String) async throws -> ClarityResult {
+        var req = URLRequest(url: URL(string: serverURL)!)
         req.httpMethod = "POST"
-        req.setValue(apiKey,             forHTTPHeaderField: "x-api-key")
-        req.setValue("2023-06-01",       forHTTPHeaderField: "anthropic-version")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(appToken,           forHTTPHeaderField: "x-app-token")
         req.timeoutInterval = 90
         req.httpBody = try JSONSerialization.data(withJSONObject: [
-            "model":      "claude-haiku-4-5-20251001",
-            "max_tokens": 4096,
-            "system":     buildSystemPrompt(),
-            "messages":   [["role": "user", "content": "Message:\n\(text)\n\nReply with ONLY valid JSON."]],
+            "text": text, "profile": buildProfileString(), "level": goal, "mode": "clarity", "style": "Clarify"
         ])
-
         let (data, response) = try await URLSession.shared.data(for: req)
         guard let http = response as? HTTPURLResponse else { throw ClarityError.apiFailed(0) }
         if http.statusCode != 200 {
-            if let errJSON = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let err = errJSON["error"] as? [String: Any],
-               let msg = err["message"] as? String {
-                throw ClarityError.apiMessage("\(http.statusCode): \(msg.prefix(120))")
-            }
+            if let e = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let msg = e["error"] as? String { throw ClarityError.apiMessage("\(http.statusCode): \(msg.prefix(120))") }
             throw ClarityError.apiFailed(http.statusCode)
         }
-
-        guard let json    = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let content = (json["content"] as? [[String: Any]])?.first?["text"] as? String
+        guard let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { throw ClarityError.badResponse }
-
-        let cleaned = extractJSON(from: content)
-        guard let parsedData = cleaned.data(using: .utf8),
-              let parsed     = try? JSONSerialization.jsonObject(with: parsedData) as? [String: Any]
-        else {
-            return ClarityResult(
-                clearerVersion: cleaned.trimmingCharacters(in: .whitespacesAndNewlines),
-                interpretationRisk: "", changeNotes: "", learningTakeaway: "", teachingExplanation: ""
-            )
-        }
-
+        let clearer: String
+        if let cv = parsed["clearer_version"] as? String, !cv.isEmpty { clearer = cv }
+        else if let paras = parsed["paragraphs"] as? [String], !paras.isEmpty { clearer = paras.joined(separator: "\n\n") }
+        else if let r = parsed["rewrite"] as? String, !r.isEmpty { clearer = r }
+        else { throw ClarityError.badResponse }
         return ClarityResult(
-            clearerVersion:      parsed["clearer_version"]      as? String ?? "",
+            clearerVersion:      clearer,
             interpretationRisk:  parsed["interpretation_risk"]  as? String ?? "",
             changeNotes:         parsed["change_notes"]         as? String ?? "",
             learningTakeaway:    parsed["learning_takeaway"]    as? String ?? "",
-            teachingExplanation: parsed["teaching_explanation"] as? String
-                ?? parsed["explanation"] as? String
-                ?? ""
+            teachingExplanation: parsed["teaching_explanation"] as? String ?? parsed["explanation"] as? String ?? ""
         )
     }
 
-    private func buildSystemPrompt() -> String {
-        """
-        You are ToneLayer Clarity, a communication assistant for neurotypical senders who want their message to be easier for neurodivergent people to understand.
+    // MARK: - Decoder
 
-        Direction: NT-to-ND.
-        ND Profile: \(buildProfileString())
-        Goal: \(goal)
-
-        Your job is to identify hidden assumptions, vague phrasing, unclear urgency, implied expectations, accidental threat signals, and missing next steps. Do not diagnose the recipient. Do not shame the sender. Be concise, practical, specific, and teach the sender one reusable communication principle.
-
-        \(buildProfileInstructions())
-
-        Always respond with ONLY valid JSON:
-        {
-          \"clearer_version\": \"the rewritten message the sender can use\",
-          \"teaching_explanation\": \"REQUIRED: plain-language explanation of how the original wording may land to the reader and why the rewrite improves clarity\",
-          \"interpretation_risk\": \"brief explanation of what the sender may sound like to an ND person and why it may be confusing, threatening, vague, or hard to act on\",
-          \"change_notes\": \"brief explanation of what changed and why\",
-          \"learning_takeaway\": \"one reusable rule the NT sender can remember next time, written plainly\"
+    private var decoderCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Label("Decoder", systemImage: "eye.circle.fill")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(Color(red: 0.10, green: 0.36, blue: 0.86))
+            Text("Paste a message you received. ToneLayer reads it \u{2014} what it actually means, and any patterns worth knowing.")
+                .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Contact name").font(.caption.weight(.medium)).foregroundStyle(.secondary)
+                TextField("Who sent this?", text: $decodeContactName).textFieldStyle(.roundedBorder).autocorrectionDisabled()
+            }
+            ZStack(alignment: .topLeading) {
+                UIKitTextView(text: $decodeText)
+                    .frame(minHeight: 120, maxHeight: 260).padding(8)
+                    .background(Color(.tertiarySystemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color(.separator), lineWidth: 0.5))
+                if decodeText.isEmpty {
+                    Text("Paste message here\u{2026}").foregroundStyle(.tertiary).font(.body)
+                        .padding(.horizontal, 14).padding(.vertical, 16).allowsHitTesting(false)
+                }
+            }
+            HStack(spacing: 10) {
+                Button { if let c = UIPasteboard.general.string, !c.isEmpty { decodeText = c } } label: {
+                    Label("Paste", systemImage: "doc.on.clipboard").frame(maxWidth: .infinity)
+                }.buttonStyle(.bordered)
+                Button { decodeText = ""; decodeTranslation = ""; decodePatterns = []; decodeBaseline = "" } label: {
+                    Label("Clear", systemImage: "xmark.circle").frame(maxWidth: .infinity)
+                }.buttonStyle(.bordered).disabled(decodeText.isEmpty)
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Sensitivity").font(.caption.weight(.medium)).foregroundStyle(.secondary)
+                Picker("Sensitivity", selection: $decodeSensitivity) {
+                    ForEach(["Low","Medium","High"], id: \.self) { Text($0).tag($0) }
+                }.pickerStyle(.segmented)
+                Text(decodeSensitivity == "Low" ? "Only surfaces clear, strong signals. Recommended."
+                     : decodeSensitivity == "Medium" ? "Flags moderate patterns and clear signals."
+                     : "Flags subtle patterns. May over-flag.").font(.caption).foregroundStyle(.secondary)
+            }
+            Button(action: startDecode) {
+                HStack {
+                    if isDecoding { ProgressView().tint(.white) } else { Image(systemName: "eye") }
+                    Text(isDecoding ? "Decoding\u{2026}" : "Decode").fontWeight(.semibold)
+                }
+                .frame(maxWidth: .infinity).padding(.vertical, 14)
+                .background(isDecoding || decodeText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    ? Color(red: 0.10, green: 0.36, blue: 0.86).opacity(0.45)
+                    : Color(red: 0.10, green: 0.36, blue: 0.86))
+                .foregroundStyle(.white).clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }.disabled(isDecoding || decodeText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            if !decodeStatus.isEmpty { Text(decodeStatus).font(.caption).foregroundStyle(.secondary) }
+            if !decodeTranslation.isEmpty { decodeResultsView }
         }
-        """
+        .padding(20).glassCard(tint: Color(red: 0.10, green: 0.36, blue: 0.86), cornerRadius: 18)
     }
 
-    private func extractJSON(from raw: String) -> String {
-        var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        if s.hasPrefix("```") {
-            if let firstNL = s.firstIndex(of: "\n") { s = String(s[s.index(after: firstNL)...]) }
-            if s.hasSuffix("```") { s = String(s.dropLast(3)).trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var decodeResultsView: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 8) {
+                Label("What it\u{2019}s saying", systemImage: "message.fill")
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(Color(red: 0.10, green: 0.36, blue: 0.86))
+                Text(decodeTranslation).font(.body).foregroundStyle(Color(red: 0.08, green: 0.18, blue: 0.42))
+                    .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+            }
+            if !decodePatterns.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label("Patterns flagged", systemImage: "flag.fill")
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(Color(red: 0.75, green: 0.12, blue: 0.12))
+                    ForEach(decodePatterns, id: \.self) { p in
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: "exclamationmark.circle.fill").font(.system(size: 13))
+                                .foregroundStyle(Color(red: 0.85, green: 0.15, blue: 0.15)).padding(.top, 2)
+                            Text(p).font(.subheadline).foregroundStyle(Color(red: 0.12, green: 0.14, blue: 0.18))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+            }
+            if !decodeBaseline.isEmpty {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "chart.line.uptrend.xyaxis").font(.system(size: 12))
+                        .foregroundStyle(Color(red: 0.10, green: 0.36, blue: 0.86)).padding(.top, 2)
+                    Text(decodeBaseline).font(.caption).foregroundStyle(Color(red: 0.10, green: 0.36, blue: 0.86))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            if decodeTentative {
+                Text("Baseline still building \u{2014} read is tentative.").font(.caption).italic().foregroundStyle(.secondary)
+            }
         }
-        if let openIdx = s.firstIndex(of: "{"),
-           let closeIdx = s.lastIndex(of: "}"),
-           openIdx < closeIdx {
-            return String(s[openIdx...closeIdx])
+        .padding(14).background(Color(red: 0.89, green: 0.93, blue: 1.00))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color(red: 0.10, green: 0.36, blue: 0.86).opacity(0.25), lineWidth: 1))
+    }
+
+    private func startDecode() {
+        let text = decodeText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        isDecoding = true; decodeStatus = "Decoding\u{2026}"
+        decodeTranslation = ""; decodePatterns = []; decodeBaseline = ""
+        Task {
+            do {
+                let result = try await callDecode(text: text)
+                await MainActor.run {
+                    isDecoding = false; decodeStatus = ""
+                    decodeTranslation = result.translation; decodePatterns = result.patterns
+                    decodeBaseline = result.baseline; decodeTentative = result.tentative
+                    let contact = decodeContactName.trimmingCharacters(in: .whitespacesAndNewlines)
+                    ClarityDecodeStore.shared.append(ClarityDecodeEntry(
+                        id: UUID(), timestamp: Date(), contact: contact.isEmpty ? "Unknown" : contact,
+                        text: text, sensitivity: decodeSensitivity,
+                        translation: result.translation, patterns: result.patterns, baseline: result.baseline
+                    ))
+                }
+            } catch {
+                await MainActor.run { isDecoding = false; decodeStatus = error.localizedDescription }
+            }
         }
-        return s
+    }
+
+    private struct DecodeResult { let translation: String; let patterns: [String]; let baseline: String; let tentative: Bool }
+
+    private func callDecode(text: String) async throws -> DecodeResult {
+        let contact = decodeContactName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let history = ClarityDecodeStore.shared.messages(for: contact)
+        var req = URLRequest(url: URL(string: decodeURL)!)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(appToken, forHTTPHeaderField: "x-app-token")
+        req.timeoutInterval = 90
+        req.httpBody = try JSONSerialization.data(withJSONObject: [
+            "text": text, "contact": contact.isEmpty ? "Unknown" : contact,
+            "sensitivity": decodeSensitivity,
+            "history": history.suffix(10).map { ["text": $0.text, "patterns": $0.patterns] }
+        ])
+        let (data, response) = try await URLSession.shared.data(for: req)
+        guard let http = response as? HTTPURLResponse else { throw ClarityError.apiFailed(0) }
+        if http.statusCode != 200 { throw ClarityError.apiFailed(http.statusCode) }
+        guard let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { throw ClarityError.badResponse }
+        let translation = parsed["translation"] as? String ?? parsed["summary"] as? String ?? parsed["analysis"] as? String ?? ""
+        guard !translation.isEmpty else { throw ClarityError.badResponse }
+        let patterns = parsed["patterns"] as? [String] ?? []
+        let baseline = parsed["baseline"] as? String ?? parsed["note"] as? String ?? ""
+        let tentative = parsed["tentative"] as? Bool ?? baseline.lowercased().contains("building")
+        return DecodeResult(translation: translation, patterns: patterns, baseline: baseline, tentative: tentative)
     }
 }
 
@@ -888,6 +970,36 @@ struct UIKitTextView: UIViewRepresentable {
         var parent: UIKitTextView
         init(_ parent: UIKitTextView) { self.parent = parent }
         func textViewDidChange(_ textView: UITextView) { parent.text = textView.text }
+    }
+}
+
+struct ClarityDecodeEntry: Codable {
+    let id: UUID; let timestamp: Date; let contact: String
+    let text: String; let sensitivity: String
+    let translation: String; let patterns: [String]; let baseline: String
+}
+
+final class ClarityDecodeStore {
+    static let shared = ClarityDecodeStore()
+    private let appGroupID = "group.com.alden.ndclarity"
+    private let fileName   = "clarity_decode_log.json"
+    private var logURL: URL? {
+        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupID)?.appendingPathComponent(fileName)
+    }
+    func load() -> [ClarityDecodeEntry] {
+        guard let url = logURL, let data = try? Data(contentsOf: url),
+              let entries = try? JSONDecoder().decode([ClarityDecodeEntry].self, from: data) else { return [] }
+        return entries
+    }
+    func messages(for contact: String) -> [ClarityDecodeEntry] {
+        guard !contact.isEmpty else { return [] }
+        return load().filter { $0.contact.lowercased() == contact.lowercased() }
+    }
+    func append(_ entry: ClarityDecodeEntry) {
+        var entries = load(); entries.append(entry)
+        if entries.count > 500 { entries = Array(entries.suffix(500)) }
+        guard let url = logURL, let data = try? JSONEncoder().encode(entries) else { return }
+        try? data.write(to: url, options: .atomic)
     }
 }
 
