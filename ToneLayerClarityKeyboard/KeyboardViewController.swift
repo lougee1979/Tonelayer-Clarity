@@ -82,10 +82,15 @@ struct KeyboardView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        let agreed = defaults?.bool(forKey: "clarityBetaAgreementAccepted.v1") ?? false
+        return VStack(spacing: 0) {
             topBar
             Divider()
-            mainPanel
+            if !agreed {
+                agreementRequiredView
+            } else {
+                mainPanel
+            }
         }
         .frame(maxWidth: .infinity)
         .clipped()
@@ -95,6 +100,21 @@ struct KeyboardView: View {
         )
         .preferredColorScheme(.light)
         .onAppear { loadSettings() }
+    }
+
+    private var agreementRequiredView: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "lock.fill")
+                .font(.system(size: 22))
+                .foregroundStyle(Color.clarityAccent)
+            Text("Open the Clarity app to accept the Beta Agreement before using the keyboard.")
+                .font(.system(size: 13))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 20)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 20)
     }
 
     // MARK: - Top bar

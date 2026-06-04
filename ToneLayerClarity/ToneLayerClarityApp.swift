@@ -15,7 +15,11 @@ import SwiftUI
 struct ToneLayerClarityApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            if hasAcceptedClarityAgreement() {
+                ContentView()
+            } else {
+                ClarityAgreementGate()
+            }
         }
     }
 }
