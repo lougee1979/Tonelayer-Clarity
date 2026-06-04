@@ -46,7 +46,7 @@ struct KeyboardView: View {
 
     private let appGroupID = "group.com.alden.ndclarity"
     private var defaults: UserDefaults? { UserDefaults(suiteName: appGroupID) }
-    private let serverURL = "https://tonelayer.app/rewrite"
+    private let serverURL = "https://tonelayer-server-production.up.railway.app/rewrite"
     private let appToken  = "d731136d97cdd46453e7581465537e0d9aee811512b885c2"
 
     @State private var profileADHD   = false

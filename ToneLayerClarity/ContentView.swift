@@ -85,8 +85,8 @@ struct ContentView: View {
     @State private var decodeTentative     = false
     @State private var decodeStatus        = ""
 
-    private let serverURL = "https://tonelayer.app/rewrite"
-    private let decodeURL = "https://tonelayer.app/decode"
+    private let serverURL = "https://tonelayer-server-production.up.railway.app/rewrite"
+    private let decodeURL = "https://tonelayer-server-production.up.railway.app/decode"
     private let appToken  = "d731136d97cdd46453e7581465537e0d9aee811512b885c2"
 
     private let showTeachingKey = "ntClarityShowTeaching"
@@ -186,7 +186,7 @@ struct ContentView: View {
             HStack(spacing: 10) {
                 statusPill(label: "Mode",      value: "Clarity")
                 statusPill(label: "Direction", value: "NT \u{2192} ND")
-                statusPill(label: "Server",    value: "\u{2713} tonelayer.app")
+                statusPill(label: "Server",    value: "\u{2713} railway.app")
             }
         }
         .frame(maxWidth: .infinity)
