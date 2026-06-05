@@ -1,17 +1,17 @@
 {
   "images" : [
     {
-      "filename" : "Purple blue yin-yang, teal purple rounded square.png",
+      "filename" : "AppIcon.png",
       "idiom" : "universal",
       "scale" : "1x"
     },
     {
-      "filename" : "Purple blue yin-yang, teal purple rounded square 1.png",
+      "filename" : "AppIcon.png",
       "idiom" : "universal",
       "scale" : "2x"
     },
     {
-      "filename" : "Purple blue yin-yang, teal purple rounded square 2.png",
+      "filename" : "AppIcon.png",
       "idiom" : "universal",
       "scale" : "3x"
     }

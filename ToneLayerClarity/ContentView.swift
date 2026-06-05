@@ -11,20 +11,20 @@ import SwiftUI
 import UIKit
 
 extension Color {
-    static let toneLayerBlue = Color(red: 0.145, green: 0.388, blue: 0.922)
-    static let toneLayerBlueSoft = Color(red: 0.859, green: 0.918, blue: 0.996)
-    static let clarityGreen = Color(red: 0.020, green: 0.588, blue: 0.412)
-    static let clarityGreenSoft = Color(red: 0.820, green: 0.980, blue: 0.898)
-    static let appNeutral = Color(red: 0.322, green: 0.322, blue: 0.357)
-    static let appSurface = Color(red: 0.925, green: 0.992, blue: 0.957)
+    static let toneLayerBlue     = Color(red: 0.376, green: 0.722, blue: 0.973)
+    static let toneLayerBlueSoft = Color(red: 0.859, green: 0.941, blue: 0.996)
+    static let clarityGreen      = Color(red: 0.482, green: 0.333, blue: 0.847)
+    static let clarityGreenSoft  = Color(red: 0.918, green: 0.898, blue: 0.980)
+    static let appNeutral  = Color(red: 0.322, green: 0.322, blue: 0.357)
+    static let appSurface  = Color(red: 0.945, green: 0.941, blue: 0.984)
     static let cardSurface = Color.white
 
-    static let brandVioletDark = clarityGreen
-    static let brandViolet = toneLayerBlue
-    static let brandGreen = clarityGreen
-    static let brandWhite = cardSurface
-    static let brandVioletMist = clarityGreenSoft
-    static let brandGreenMist = clarityGreenSoft
+    static let brandVioletDark  = clarityGreen
+    static let brandViolet      = toneLayerBlue
+    static let brandGreen       = clarityGreen
+    static let brandWhite       = cardSurface
+    static let brandVioletMist  = clarityGreenSoft
+    static let brandGreenMist   = toneLayerBlueSoft
 }
 
 struct GlassCard: ViewModifier {
@@ -52,9 +52,12 @@ extension View {
 }
 
 struct ContentView: View {
-    @State private var apiKey = ""
     @State private var draft = ""
-    @State private var audienceLens = "General ND"
+    @State private var profileADHD   = false
+    @State private var profileAutism  = false
+    @State private var profileAUDHD   = false
+    @State private var profilePTSD    = false
+    @State private var profileCPTSD   = false
     @State private var goal = "Make clearer"
     @State private var isRewriting = false
     @State private var status = ""
@@ -63,7 +66,7 @@ struct ContentView: View {
     @State private var changeNotes = ""
     @State private var learningTakeaway = ""
     @State private var teachingExplanation = ""
-    @State private var selectedResult = "Fix"
+    @State private var selectedResult = "Rewrite"
     @State private var showingOptions = false
     @State private var showTeaching = true
     @State private var aiConsent = false
@@ -71,14 +74,27 @@ struct ContentView: View {
     @State private var activityItems: [Any] = []
     @State private var showingExportSheet = false
 
-    private let apiKeyKey = "ntClarityClaudeAPIKey"
+    // Decoder
+    @State private var decodeContactName   = ""
+    @State private var decodeText          = ""
+    @State private var decodeSensitivity   = "Low"
+    @State private var isDecoding          = false
+    @State private var decodeTranslation   = ""
+    @State private var decodePatterns: [String] = []
+    @State private var decodeBaseline      = ""
+    @State private var decodeTentative     = false
+    @State private var decodeStatus        = ""
+
+    private let serverURL = "https://tonelayer-server-production.up.railway.app/rewrite"
+    private let decodeURL = "https://tonelayer-server-production.up.railway.app/decode"
+    private let appToken  = "d731136d97cdd46453e7581465537e0d9aee811512b885c2"
+
     private let showTeachingKey = "ntClarityShowTeaching"
-    private let aiConsentKey = "toneLayerAIProcessingConsent"
-    private let appGroupID = "group.com.alden.ndclarity"
+    private let aiConsentKey    = "toneLayerAIProcessingConsent"
+    private let appGroupID      = "group.com.alden.ndclarity"
     private var sharedDefaults: UserDefaults? { UserDefaults(suiteName: appGroupID) }
-    private let lenses = ["General ND", "ADHD", "Autism", "PTSD / CPTSD", "Mixed"]
-    private let goals = ["Make clearer", "Reduce anxiety", "Make actionable"]
-    private let resultTabs = ["Fix", "Tone", "Why", "Tip"]
+    private let goals      = ["Make clearer", "Reduce anxiety", "Make actionable"]
+    private let resultTabs = ["Original", "Rewrite", "Tone"]
     private let dailyTips: [(title: String, body: String)] = [
         (
             "A blocked call may not feel neutral",
@@ -116,6 +132,8 @@ struct ContentView: View {
                 headerCard
                 dailyTipCard
                 composerCard
+                teachingCard
+                decoderCard
                 optionsCard
             }
             .padding()
@@ -123,17 +141,17 @@ struct ContentView: View {
         .background(Color.appSurface)
         .preferredColorScheme(.light)
         .onAppear {
-            apiKey = sharedDefaults?.string(forKey: "claudeAPIKey")
-                ?? UserDefaults.standard.string(forKey: apiKeyKey)
-                ?? ""
-            if !apiKey.isEmpty { syncKeyboardSettings() }
-            if UserDefaults.standard.object(forKey: showTeachingKey) == nil {
-                showTeaching = true
-                UserDefaults.standard.set(true, forKey: showTeachingKey)
-            } else {
+            showTeaching = true
+            if UserDefaults.standard.object(forKey: showTeachingKey) != nil {
                 showTeaching = UserDefaults.standard.bool(forKey: showTeachingKey)
             }
-            aiConsent = UserDefaults.standard.bool(forKey: aiConsentKey)
+            UserDefaults.standard.set(showTeaching, forKey: showTeachingKey)
+            aiConsent     = UserDefaults.standard.bool(forKey: aiConsentKey)
+            profileADHD   = UserDefaults.standard.bool(forKey: "ndprofile.adhd")
+            profileAutism = UserDefaults.standard.bool(forKey: "ndprofile.autism")
+            profileAUDHD  = UserDefaults.standard.bool(forKey: "ndprofile.audhd")
+            profilePTSD   = UserDefaults.standard.bool(forKey: "ndprofile.ptsd")
+            profileCPTSD  = UserDefaults.standard.bool(forKey: "ndprofile.cptsd")
             syncKeyboardSettings()
         }
         .sheet(isPresented: $showingExportSheet) {
@@ -153,12 +171,8 @@ struct ContentView: View {
                 .frame(width: 88, height: 88)
                 .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
 
-            Text("ToneLayer")
-                .font(.system(size: 32, weight: .bold))
-                .foregroundStyle(Color.clarityGreen)
-
-            Text("Clarity")
-                .font(.headline.weight(.semibold))
+            Text("ToneLayer Clarity")
+                .font(.system(size: 30, weight: .bold))
                 .foregroundStyle(Color.clarityGreen)
 
             Text("Rewrite NT speech so it lands more clearly for neurodivergent readers.")
@@ -166,9 +180,9 @@ struct ContentView: View {
                 .foregroundStyle(.secondary)
 
             HStack(spacing: 10) {
-                statusPill(label: "Mode", value: "Clarity")
-                statusPill(label: "Direction", value: "NT -> ND")
-                statusPill(label: "Live AI", value: aiConsent && !apiKey.isEmpty ? "On" : "Local")
+                statusPill(label: "Mode",      value: "Clarity")
+                statusPill(label: "Direction", value: "NT \u{2192} ND")
+                statusPill(label: "Server",    value: "\u{2713} railway.app")
             }
         }
         .frame(maxWidth: .infinity)
@@ -177,17 +191,19 @@ struct ContentView: View {
     }
 
     private func statusPill(label: String, value: String) -> some View {
-        HStack {
+        VStack(spacing: 2) {
             Text(label)
-                .font(.caption)
+                .font(.caption2)
                 .foregroundStyle(.secondary)
-            Spacer()
+                .lineLimit(1)
             Text(value)
                 .font(.caption.weight(.bold))
                 .foregroundStyle(Color.clarityGreen)
+                .lineLimit(1)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity)
         .background(Color.clarityGreenSoft)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
@@ -215,6 +231,83 @@ struct ContentView: View {
     private var todayTip: (title: String, body: String) {
         let day = Calendar.current.ordinality(of: .day, in: .year, for: Date()) ?? 1
         return dailyTips[(day - 1) % dailyTips.count]
+    }
+
+    // Teaching card \u{2014} always visible below the result, never a tab
+    // Only hidden when toggled off in Options
+    private var teachingCard: some View {
+        Group {
+            if showTeaching {
+                VStack(alignment: .leading, spacing: 14) {
+                    Label("How this lands", systemImage: "lightbulb.fill")
+                        .font(.headline)
+                        .foregroundStyle(Color.clarityGreen)
+
+                    if hasOutput {
+                        if !teachingExplanation.isEmpty {
+                            Text(teachingExplanation)
+                                .font(.body)
+                                .foregroundStyle(Color.primary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        if !interpretationRisk.isEmpty {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("How this may sound:")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                Text(interpretationRisk)
+                                    .font(.subheadline)
+                                    .foregroundStyle(Color.primary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+
+                        if !changeNotes.isEmpty {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("What changed:")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                Text(changeNotes)
+                                    .font(.subheadline)
+                                    .foregroundStyle(Color.primary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+
+                        if !learningTakeaway.isEmpty {
+                            HStack(alignment: .top, spacing: 10) {
+                                Image(systemName: "arrow.right.circle.fill")
+                                    .foregroundStyle(Color.clarityGreen)
+                                    .font(.subheadline)
+                                    .padding(.top, 2)
+                                Text(learningTakeaway)
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(Color.primary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(12)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.clarityGreenSoft)
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        }
+                    } else {
+                        Text("Paste a message above and tap Rewrite to see how it may land for a neurodivergent reader.")
+                            .font(.body)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(16)
+                .background(Color.clarityGreenSoft.opacity(0.5))
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(Color.clarityGreen.opacity(0.25), lineWidth: 1)
+                )
+            }
+        }
     }
 
     private var composerCard: some View {
@@ -280,12 +373,13 @@ struct ContentView: View {
                     } else {
                         Image(systemName: "wand.and.stars")
                     }
-                    Text(isRewriting ? "Tuning…" : "Clarify")
+                    Text(isRewriting ? "Tuning\u{2026}" : "Rewrite")
                         .fontWeight(.semibold)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 13)
-                .background(isRewriting || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color.clarityGreen.opacity(0.45) : Color.clarityGreen)
+                .background(isRewriting || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    ? Color.clarityGreen.opacity(0.45) : Color.clarityGreen)
                 .foregroundStyle(.white)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
@@ -297,34 +391,33 @@ struct ContentView: View {
                     .foregroundStyle(.secondary)
             }
 
-            if showTeaching {
-                Picker("Result", selection: $selectedResult) {
-                    ForEach(resultTabs, id: \.self) { Text($0).font(.caption).lineLimit(1).minimumScaleFactor(0.85).tag($0) }
+            HStack(spacing: 6) {
+                ForEach(resultTabs, id: \.self) { tab in
+                    Button { selectedResult = tab } label: {
+                        Text(tab)
+                            .font(.caption.weight(selectedResult == tab ? .bold : .semibold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(selectedResult == tab ? Color.clarityGreen : Color(.tertiarySystemBackground))
+                            .foregroundStyle(selectedResult == tab ? Color.white : Color.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
                 }
-                .pickerStyle(.segmented)
             }
 
-            Text(resultWindowText)
-                .font(.body)
-                        .foregroundStyle(Color(red: 0.12, green: 0.15, blue: 0.18))
-                .frame(maxWidth: .infinity, minHeight: 120, alignment: .topLeading)
-                .padding(14)
-                        .background(Color.clarityGreenSoft.opacity(0.95))
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .textSelection(.enabled)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Label("Why", systemImage: "lightbulb")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Color.clarityGreen)
-                Text(teachingWindowText)
-                    .font(.subheadline)
-                        .foregroundStyle(Color(red: 0.12, green: 0.15, blue: 0.18))
+            ScrollView {
+                Text(resultWindowText)
+                    .font(.body)
+                    .foregroundStyle(Color(red: 0.12, green: 0.15, blue: 0.18))
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .padding(14)
                     .textSelection(.enabled)
             }
-            .frame(maxWidth: .infinity, minHeight: 90, alignment: .topLeading)
-            .padding(14)
-            .background(Color.brandGreenMist)
+            .frame(minHeight: 220, maxHeight: 400)
+            .background(Color.clarityGreenSoft.opacity(0.95))
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
             if hasOutput {
@@ -358,39 +451,6 @@ struct ContentView: View {
                 }
             }
 
-            Text("Send to")
-                .font(.subheadline.weight(.semibold))
-
-            HStack(spacing: 10) {
-                Button { openEmail() } label: {
-                    Label("Email", systemImage: "envelope")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-
-                Button { openMessages() } label: {
-                    Label("Message", systemImage: "message")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-            }
-            .disabled(!hasOutput)
-
-            HStack(spacing: 10) {
-                Button { exportTextFile(label: "Word") } label: {
-                    Label("Word", systemImage: "doc.text")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-
-                Button { exportTextFile(label: "Pages") } label: {
-                    Label("Pages", systemImage: "doc.richtext")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-            }
-            .disabled(!hasOutput)
-
             Button { shareSelectedResult() } label: {
                 Label("Share", systemImage: "square.and.arrow.up")
                     .frame(maxWidth: .infinity)
@@ -407,26 +467,32 @@ struct ContentView: View {
     private var optionsCard: some View {
         DisclosureGroup(isExpanded: $showingOptions) {
             VStack(alignment: .leading, spacing: 18) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Label("Audience Lens", systemImage: "person.2")
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Label("ND Profile", systemImage: "person.2")
                         .font(.headline)
-                    Picker("Audience Lens", selection: $audienceLens) {
-                        ForEach(lenses, id: \.self) { Text($0).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                    .onChange(of: audienceLens) { _, _ in
-                        syncKeyboardSettings()
-                    }
-                    Text("Default to General ND unless you know which lens is appropriate.")
+                    Text("Check all that apply. AUDHD = ADHD + Autism combined. Combinations build the AI instructions automatically.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                        profileCheckbox("ADHD",   isOn: $profileADHD)
+                        profileCheckbox("Autism", isOn: $profileAutism)
+                        profileCheckbox("AUDHD",  isOn: $profileAUDHD)
+                        profileCheckbox("PTSD",   isOn: $profilePTSD)
+                        profileCheckbox("CPTSD",  isOn: $profileCPTSD)
+                    }
+                    if buildProfileString() != "General ND" {
+                        Label("Active: \(buildProfileString())", systemImage: "checkmark.circle.fill")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Color.clarityGreen)
+                    }
                 }
 
                 HStack(alignment: .top, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
                         Label("Teaching explanations", systemImage: "lightbulb")
                             .font(.headline)
-                        Text("Show how the message may sound and what to learn for next time.")
+                        Text("Show the teaching card below the rewrite. Turn off only when you want rewrites without explanations.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -436,7 +502,6 @@ struct ContentView: View {
                         .onChange(of: showTeaching) { _, newValue in
                             UserDefaults.standard.set(newValue, forKey: showTeachingKey)
                             syncKeyboardSettings()
-                            if !newValue { selectedResult = "Fix" }
                         }
                 }
 
@@ -444,7 +509,7 @@ struct ContentView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Label("AI processing consent", systemImage: "lock.shield")
                             .font(.headline)
-                        Text("ToneLayer sends only the message text you choose to clarify to the AI provider for rewriting. Do not include passwords, secrets, or medical record numbers in test messages.")
+                        Text("Clarity sends only the message text you choose to clarify to the AI provider for rewriting. Do not include passwords, secrets, or medical record numbers in test messages.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -456,20 +521,6 @@ struct ContentView: View {
                         }
                 }
 
-                VStack(alignment: .leading, spacing: 10) {
-                    Label("API Key", systemImage: "key.fill")
-                        .font(.headline)
-                    SecureField("sk-ant-...", text: $apiKey)
-                        .textFieldStyle(.roundedBorder)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                    Button("Save Key") {
-                        UserDefaults.standard.set(apiKey, forKey: apiKeyKey)
-                        syncKeyboardSettings()
-                        status = "API key saved"
-                    }
-                    .font(.subheadline.weight(.semibold))
-                }
             }
             .padding(.top, 12)
         } label: {
@@ -485,27 +536,40 @@ struct ContentView: View {
         .glassCard(tint: .appNeutral, cornerRadius: 18)
     }
 
+    private func profileCheckbox(_ label: String, isOn: Binding<Bool>) -> some View {
+        Button {
+            isOn.wrappedValue.toggle()
+            syncKeyboardSettings()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: isOn.wrappedValue ? "checkmark.square.fill" : "square")
+                    .foregroundStyle(isOn.wrappedValue ? Color.clarityGreen : Color.secondary)
+                    .font(.body)
+                Text(label)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.primary)
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(isOn.wrappedValue ? Color.clarityGreenSoft : Color(.tertiarySystemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(isOn.wrappedValue ? Color.clarityGreen.opacity(0.4) : Color.clear, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
 
     private var messageLengthNotice: some View {
         let words = draft.trimmingCharacters(in: .whitespacesAndNewlines)
             .split { $0.isWhitespace || $0.isNewline }
             .count
         let chars = draft.count
-        let isLong = chars >= 700 || words >= 120
-        return VStack(alignment: .leading, spacing: 6) {
-            Text("\(chars) chars • \(words) words")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            if isLong {
-                Text("This is getting long for a text. Are you okay? If this is turning into a novel, try Clarify or Make Brief before sending.")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Color(red: 0.42, green: 0.24, blue: 0.02))
-                    .padding(10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.yellow.opacity(0.18))
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            }
-        }
+        return Text("\(chars) chars \u{2022} \(words) words")
+            .font(.caption)
+            .foregroundStyle(.secondary)
     }
 
     private var hasOutput: Bool {
@@ -514,44 +578,17 @@ struct ContentView: View {
 
     private var selectedResultText: String {
         switch selectedResult {
-        case "Tone": return interpretationRisk
-        case "Why": return changeNotes
-        case "Tip": return learningTakeaway
-        default: return clearerVersion
+        case "Original": return draft
+        case "Tone":     return interpretationRisk
+        default:         return clearerVersion
         }
     }
 
     private var resultWindowText: String {
-        guard hasOutput else {
-            return "Your clearer version will appear here."
-        }
-        return selectedResultText.isEmpty ? "Your clearer version will appear here." : selectedResultText
-    }
-
-    private var teachingWindowText: String {
-        guard showTeaching else {
-            return "Teaching explanations are turned off in Options."
-        }
-        guard hasOutput else {
-            return "After a rewrite, this explains how the message may land and why the wording changed."
-        }
-        var parts: [String] = []
-        if !teachingExplanation.isEmpty {
-            parts.append(teachingExplanation)
-        }
-        if !interpretationRisk.isEmpty {
-            parts.append("How this may sound:\n\(interpretationRisk)")
-        }
-        if !changeNotes.isEmpty {
-            parts.append("What changed:\n\(changeNotes)")
-        }
-        if !learningTakeaway.isEmpty {
-            parts.append("Learn:\n\(learningTakeaway)")
-        }
-        if !parts.isEmpty {
-            return parts.joined(separator: "\n\n")
-        }
-        return "No teaching note returned for this rewrite."
+        if selectedResult == "Original" { return draft.isEmpty ? "Your original message will show here." : draft }
+        guard hasOutput else { return "Tap Rewrite to see the rewritten version here." }
+        let text = selectedResultText
+        return text.isEmpty ? "Nothing to show for this tab yet." : text
     }
 
     private func pasteFromClipboard() {
@@ -570,20 +607,56 @@ struct ContentView: View {
     }
 
     private func syncKeyboardSettings() {
-        sharedDefaults?.set(apiKey, forKey: "claudeAPIKey")
-        sharedDefaults?.set(showTeaching, forKey: "showExplanation")
-        sharedDefaults?.set("Clarity", forKey: "keyboardMode")
-        sharedDefaults?.set(normalizedKeyboardProfile(audienceLens), forKey: "selectedProfile")
+        UserDefaults.standard.set(profileADHD,   forKey: "ndprofile.adhd")
+        UserDefaults.standard.set(profileAutism, forKey: "ndprofile.autism")
+        UserDefaults.standard.set(profileAUDHD,  forKey: "ndprofile.audhd")
+        UserDefaults.standard.set(profilePTSD,   forKey: "ndprofile.ptsd")
+        UserDefaults.standard.set(profileCPTSD,  forKey: "ndprofile.cptsd")
+        sharedDefaults?.set(showTeaching,   forKey: "showExplanation")
+        sharedDefaults?.set("Clarity",      forKey: "keyboardMode")
+        sharedDefaults?.set(buildProfileString(), forKey: "selectedProfile")
+        sharedDefaults?.set(profileADHD,    forKey: "ndprofile.adhd")
+        sharedDefaults?.set(profileAutism,  forKey: "ndprofile.autism")
+        sharedDefaults?.set(profileAUDHD,   forKey: "ndprofile.audhd")
+        sharedDefaults?.set(profilePTSD,    forKey: "ndprofile.ptsd")
+        sharedDefaults?.set(profileCPTSD,   forKey: "ndprofile.cptsd")
         sharedDefaults?.synchronize()
     }
 
-    private func normalizedKeyboardProfile(_ lens: String) -> String {
-        switch lens {
-        case "General ND", "Mixed":
-            return "Mixed / Not Sure"
-        default:
-            return lens
+    private func buildProfileString() -> String {
+        var p: [String] = []
+        if profileAUDHD {
+            p.append("AUDHD")
+        } else {
+            if profileADHD   { p.append("ADHD") }
+            if profileAutism { p.append("Autism") }
         }
+        if profilePTSD   { p.append("PTSD") }
+        if profileCPTSD  { p.append("CPTSD") }
+        return p.isEmpty ? "General ND" : p.joined(separator: ", ")
+    }
+
+    private func buildProfileInstructions() -> String {
+        var parts: [String] = []
+        if profileAUDHD || (profileADHD && profileAutism) {
+            parts.append("AUDHD: combine ADHD and Autism communication traits \u{2014} put priority and next action first, use ultra-literal language, eliminate all social subtext and implied expectations, define every vague phrase (soon, later, we should talk), reduce working-memory load, make urgency and the ask fully explicit.")
+        } else {
+            if profileADHD {
+                parts.append("ADHD: reduce working-memory load, put priority and next action first, make urgency explicit, avoid buried asks and long multi-step wording.")
+            }
+            if profileAutism {
+                parts.append("Autism: make meaning fully literal, remove all social subtext and implied expectations, define every vague phrase (soon, later, we should talk), state the ask directly.")
+            }
+        }
+        if profilePTSD {
+            parts.append("PTSD: lower all threat signals, add reassurance where appropriate, avoid vague warnings or power-heavy phrasing, make emotional stakes explicit and calm.")
+        }
+        if profileCPTSD {
+            parts.append("CPTSD: avoid language implying punishment, withdrawal, or conditional approval. Be warm, non-threatening, and explicit about safety and intent. Address fawn and freeze response patterns.")
+        }
+        return parts.isEmpty
+            ? "General ND: remove all ambiguity, make the ask explicit, add necessary context, state urgency, and give a concrete next step."
+            : parts.joined(separator: " ")
     }
 
     private func recordSatisfaction(helpful: Bool) {
@@ -625,31 +698,19 @@ struct ContentView: View {
     private func rewriteMessage() {
         let input = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !input.isEmpty else { return }
-        guard aiConsent else {
-            status = "Turn on AI processing consent in Options first"
-            return
-        }
-        guard !apiKey.isEmpty else {
-            status = "Add your Claude API key in Options first"
-            return
-        }
-
         isRewriting = true
         incrementMetric("rewrite.requested")
-        if input.count >= 700 || input.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).count >= 120 {
-            incrementMetric("longMessage.flagged")
-        }
         status = "Checking message..."
-        selectedResult = "Fix"
+        selectedResult = "Rewrite"
 
         Task {
             do {
-                let result = try await callClaude(text: input)
+                let result = try await callServer(text: input)
                 await MainActor.run {
-                    clearerVersion = result.clearerVersion
-                    interpretationRisk = result.interpretationRisk
-                    changeNotes = result.changeNotes
-                    learningTakeaway = result.learningTakeaway
+                    clearerVersion      = result.clearerVersion
+                    interpretationRisk  = result.interpretationRisk
+                    changeNotes         = result.changeNotes
+                    learningTakeaway    = result.learningTakeaway
                     teachingExplanation = result.teachingExplanation
                     incrementMetric("rewrite.success")
                     isRewriting = false
@@ -673,139 +734,200 @@ struct ContentView: View {
         let teachingExplanation: String
     }
 
-    private func callClaude(text: String) async throws -> ClarityResult {
-        var req = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
+    private func callServer(text: String) async throws -> ClarityResult {
+        var req = URLRequest(url: URL(string: serverURL)!)
         req.httpMethod = "POST"
-        req.setValue(apiKey, forHTTPHeaderField: "x-api-key")
-        req.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(appToken,           forHTTPHeaderField: "x-app-token")
         req.timeoutInterval = 90
         req.httpBody = try JSONSerialization.data(withJSONObject: [
-            "model": "claude-haiku-4-5-20251001",
-            "max_tokens": 4096,
-            "system": buildSystemPrompt(),
-            "messages": [["role": "user", "content": "Message:\n\(text)\n\nReply with ONLY valid JSON."]],
+            "text": text, "profile": buildProfileString(), "level": goal, "mode": "clarity", "style": "Clarify"
         ])
-
         let (data, response) = try await URLSession.shared.data(for: req)
         guard let http = response as? HTTPURLResponse else { throw ClarityError.apiFailed(0) }
         if http.statusCode != 200 {
-            if let errJSON = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let err = errJSON["error"] as? [String: Any],
-               let msg = err["message"] as? String {
-                throw ClarityError.apiMessage("\(http.statusCode): \(msg.prefix(120))")
-            }
+            if let e = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let msg = e["error"] as? String { throw ClarityError.apiMessage("\(http.statusCode): \(msg.prefix(120))") }
             throw ClarityError.apiFailed(http.statusCode)
         }
-
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let content = (json["content"] as? [[String: Any]])?.first?["text"] as? String
+        guard let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { throw ClarityError.badResponse }
-
-        let cleaned = extractJSON(from: content)
-        guard let parsedData = cleaned.data(using: .utf8),
-              let parsed = try? JSONSerialization.jsonObject(with: parsedData) as? [String: Any]
-        else {
-            return ClarityResult(
-                clearerVersion: cleaned.trimmingCharacters(in: .whitespacesAndNewlines),
-                interpretationRisk: "",
-                changeNotes: "",
-                learningTakeaway: "",
-                teachingExplanation: ""
-            )
-        }
-
+        let clearer: String
+        if let cv = parsed["clearer_version"] as? String, !cv.isEmpty { clearer = cv }
+        else if let paras = parsed["paragraphs"] as? [String], !paras.isEmpty { clearer = paras.joined(separator: "\n\n") }
+        else if let r = parsed["rewrite"] as? String, !r.isEmpty { clearer = r }
+        else { throw ClarityError.badResponse }
         return ClarityResult(
-            clearerVersion: parsed["clearer_version"] as? String ?? "",
-            interpretationRisk: parsed["interpretation_risk"] as? String ?? "",
-            changeNotes: parsed["change_notes"] as? String ?? "",
-            learningTakeaway: parsed["learning_takeaway"] as? String ?? "",
-            teachingExplanation: parsed["teaching_explanation"] as? String
-                ?? parsed["explanation"] as? String
-                ?? ""
+            clearerVersion:      clearer,
+            interpretationRisk:  parsed["interpretation_risk"]  as? String ?? "",
+            changeNotes:         parsed["change_notes"]         as? String ?? "",
+            learningTakeaway:    parsed["learning_takeaway"]    as? String ?? "",
+            teachingExplanation: parsed["teaching_explanation"] as? String ?? parsed["explanation"] as? String ?? ""
         )
     }
 
-    private func buildSystemPrompt() -> String {
-        """
-        You are ToneLayer Clarity, a communication assistant for neurotypical senders who want their message to be easier for neurodivergent people to understand.
+    // MARK: - Decoder
 
-        Direction: NT-to-ND.
-        Audience lens: \(audienceLens)
-        Goal: \(goal)
-
-        Your job is to identify hidden assumptions, vague phrasing, unclear urgency, implied expectations, accidental threat signals, and missing next steps. Do not diagnose the recipient. Do not shame the sender. Be concise, practical, specific, and teach the sender one reusable communication principle.
-
-        General ND: remove ambiguity, make the ask explicit, add necessary context, state urgency, and give a concrete next step.
-        ADHD: reduce working-memory load, make priority and next action obvious, avoid buried asks and long multi-step wording.
-        Autism: make meaning literal, remove social subtext, state expectations directly, avoid vague phrases like "soon", "later", "we should talk", or "whatever works" unless defined.
-        PTSD / CPTSD: reduce threat signals, add reassurance when appropriate, avoid vague warnings, criticism without context, or power-heavy phrasing.
-        Mixed: assume overlapping ADHD, autistic, PTSD/CPTSD, and anxiety-related communication needs. Make the main point obvious first. Reduce working-memory load. Make implied meaning explicit. Remove vague timing or social hints. Lower threat signals and defensive wording. Include reassurance when appropriate. End with one clear next step.
-
-        Always respond with ONLY valid JSON:
-        {
-          "clearer_version": "the rewritten message the sender can use",
-          "teaching_explanation": "REQUIRED: plain-language explanation of how the original wording may land to the reader and why the rewrite improves clarity",
-          "interpretation_risk": "brief explanation of what the sender may sound like to an ND person and why it may be confusing, threatening, vague, or hard to act on",
-          "change_notes": "brief explanation of what changed and why",
-          "learning_takeaway": "one reusable rule the NT sender can remember next time, written plainly"
+    private var decoderCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Label("Decoder", systemImage: "eye.circle.fill")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(Color(red: 0.10, green: 0.36, blue: 0.86))
+            Text("Paste a message you received. Clarity reads it \u{2014} what it actually means, and any patterns worth knowing.")
+                .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Contact name").font(.caption.weight(.medium)).foregroundStyle(.secondary)
+                TextField("Who sent this?", text: $decodeContactName).textFieldStyle(.roundedBorder).autocorrectionDisabled()
+            }
+            ZStack(alignment: .topLeading) {
+                UIKitTextView(text: $decodeText)
+                    .frame(minHeight: 120, maxHeight: 260).padding(8)
+                    .background(Color(.tertiarySystemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color(.separator), lineWidth: 0.5))
+                if decodeText.isEmpty {
+                    Text("Paste message here\u{2026}").foregroundStyle(.tertiary).font(.body)
+                        .padding(.horizontal, 14).padding(.vertical, 16).allowsHitTesting(false)
+                }
+            }
+            HStack(spacing: 10) {
+                Button { if let c = UIPasteboard.general.string, !c.isEmpty { decodeText = c } } label: {
+                    Label("Paste", systemImage: "doc.on.clipboard").frame(maxWidth: .infinity)
+                }.buttonStyle(.bordered)
+                Button { decodeText = ""; decodeTranslation = ""; decodePatterns = []; decodeBaseline = "" } label: {
+                    Label("Clear", systemImage: "xmark.circle").frame(maxWidth: .infinity)
+                }.buttonStyle(.bordered).disabled(decodeText.isEmpty)
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Sensitivity").font(.caption.weight(.medium)).foregroundStyle(.secondary)
+                Picker("Sensitivity", selection: $decodeSensitivity) {
+                    ForEach(["Low","Medium","High"], id: \.self) { Text($0).tag($0) }
+                }.pickerStyle(.segmented)
+                Text(decodeSensitivity == "Low" ? "Only surfaces clear, strong signals. Recommended."
+                     : decodeSensitivity == "Medium" ? "Flags moderate patterns and clear signals."
+                     : "Flags subtle patterns. May over-flag.").font(.caption).foregroundStyle(.secondary)
+            }
+            Button(action: startDecode) {
+                HStack {
+                    if isDecoding { ProgressView().tint(.white) } else { Image(systemName: "eye") }
+                    Text(isDecoding ? "Decoding\u{2026}" : "Decode").fontWeight(.semibold)
+                }
+                .frame(maxWidth: .infinity).padding(.vertical, 14)
+                .background(isDecoding ? Color(red: 0.10, green: 0.36, blue: 0.86).opacity(0.45) : Color(red: 0.10, green: 0.36, blue: 0.86))
+                .foregroundStyle(.white).clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }.disabled(isDecoding)
+            if !decodeStatus.isEmpty {
+                Text(decodeStatus)
+                    .font(.subheadline)
+                    .foregroundStyle(decodeStatus.contains("…") ? Color.secondary : Color.red)
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(decodeStatus.contains("…") ? Color.clear : Color.red.opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+            if !decodeTranslation.isEmpty { decodeResultsView }
         }
-        """
+        .padding(20).glassCard(tint: Color(red: 0.10, green: 0.36, blue: 0.86), cornerRadius: 18)
     }
 
-    private func extractJSON(from raw: String) -> String {
-        var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        if s.hasPrefix("```") {
-            if let firstNL = s.firstIndex(of: "\n") {
-                s = String(s[s.index(after: firstNL)...])
+    private var decodeResultsView: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 8) {
+                Label("What it\u{2019}s saying", systemImage: "message.fill")
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(Color(red: 0.10, green: 0.36, blue: 0.86))
+                Text(decodeTranslation).font(.body).foregroundStyle(Color(red: 0.08, green: 0.18, blue: 0.42))
+                    .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
             }
-            if s.hasSuffix("```") {
-                s = String(s.dropLast(3)).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !decodePatterns.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label("Patterns flagged", systemImage: "flag.fill")
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(Color(red: 0.75, green: 0.12, blue: 0.12))
+                    ForEach(decodePatterns, id: \.self) { p in
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: "exclamationmark.circle.fill").font(.system(size: 13))
+                                .foregroundStyle(Color(red: 0.85, green: 0.15, blue: 0.15)).padding(.top, 2)
+                            Text(p).font(.subheadline).foregroundStyle(Color(red: 0.12, green: 0.14, blue: 0.18))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+            }
+            if !decodeBaseline.isEmpty {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "chart.line.uptrend.xyaxis").font(.system(size: 12))
+                        .foregroundStyle(Color(red: 0.10, green: 0.36, blue: 0.86)).padding(.top, 2)
+                    Text(decodeBaseline).font(.caption).foregroundStyle(Color(red: 0.10, green: 0.36, blue: 0.86))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            if decodeTentative {
+                Text("Baseline still building \u{2014} read is tentative.").font(.caption).italic().foregroundStyle(.secondary)
             }
         }
-        if let openIdx = s.firstIndex(of: "{"),
-           let closeIdx = s.lastIndex(of: "}"),
-           openIdx < closeIdx {
-            return String(s[openIdx...closeIdx])
-        }
-        return s
+        .padding(14).background(Color(red: 0.89, green: 0.93, blue: 1.00))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color(red: 0.10, green: 0.36, blue: 0.86).opacity(0.25), lineWidth: 1))
     }
 
-    private func openEmail() {
-        let encodedBody = clearerVersion.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-        guard let url = URL(string: "mailto:?body=\(encodedBody)") else { return }
-        UIApplication.shared.open(url) { success in
-            if !success {
-                UIPasteboard.general.string = clearerVersion
-                status = "Email unavailable. Copied instead."
+    private func startDecode() {
+        if decodeText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if let clip = UIPasteboard.general.string, !clip.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                decodeText = clip
+            } else {
+                decodeStatus = "Nothing to decode — copy a message first."
+                return
+            }
+        }
+        let text = decodeText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        isDecoding = true; decodeStatus = "Decoding\u{2026}"
+        decodeTranslation = ""; decodePatterns = []; decodeBaseline = ""
+        Task {
+            do {
+                let result = try await callDecode(text: text)
+                await MainActor.run {
+                    isDecoding = false; decodeStatus = ""
+                    decodeTranslation = result.translation; decodePatterns = result.patterns
+                    decodeBaseline = result.baseline; decodeTentative = result.tentative
+                    let contact = decodeContactName.trimmingCharacters(in: .whitespacesAndNewlines)
+                    ClarityDecodeStore.shared.append(ClarityDecodeEntry(
+                        id: UUID(), timestamp: Date(), contact: contact.isEmpty ? "Unknown" : contact,
+                        text: text, sensitivity: decodeSensitivity,
+                        translation: result.translation, patterns: result.patterns, baseline: result.baseline
+                    ))
+                }
+            } catch {
+                await MainActor.run { isDecoding = false; decodeStatus = error.localizedDescription }
             }
         }
     }
 
-    private func openMessages() {
-        let encodedBody = clearerVersion.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-        guard let url = URL(string: "sms:&body=\(encodedBody)") else { return }
-        UIApplication.shared.open(url) { success in
-            if !success {
-                UIPasteboard.general.string = clearerVersion
-                status = "Messages unavailable. Copied instead."
-            }
-        }
-    }
+    private struct DecodeResult { let translation: String; let patterns: [String]; let baseline: String; let tentative: Bool }
 
-    private func exportTextFile(label: String) {
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ND-Clarity-\(label).txt")
-        do {
-            try clearerVersion.write(to: url, atomically: true, encoding: .utf8)
-            exportURL = url
-            activityItems = [url]
-            showingExportSheet = true
-            status = "Choose \(label) from the share sheet"
-        } catch {
-            UIPasteboard.general.string = clearerVersion
-            status = "Export failed. Copied instead."
-        }
+    private func callDecode(text: String) async throws -> DecodeResult {
+        let contact = decodeContactName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let history = ClarityDecodeStore.shared.messages(for: contact)
+        var req = URLRequest(url: URL(string: decodeURL)!)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(appToken, forHTTPHeaderField: "x-app-token")
+        req.timeoutInterval = 90
+        req.httpBody = try JSONSerialization.data(withJSONObject: [
+            "text": text, "contact": contact.isEmpty ? "Unknown" : contact,
+            "sensitivity": decodeSensitivity,
+            "history": history.suffix(10).map { ["text": $0.text, "patterns": $0.patterns] }
+        ])
+        let (data, response) = try await URLSession.shared.data(for: req)
+        guard let http = response as? HTTPURLResponse else { throw ClarityError.apiFailed(0) }
+        if http.statusCode != 200 { throw ClarityError.apiFailed(http.statusCode) }
+        guard let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { throw ClarityError.badResponse }
+        let translation = parsed["translation"] as? String ?? parsed["summary"] as? String ?? parsed["analysis"] as? String ?? ""
+        guard !translation.isEmpty else { throw ClarityError.badResponse }
+        let patterns = parsed["patterns"] as? [String] ?? []
+        let baseline = parsed["baseline"] as? String ?? parsed["note"] as? String ?? ""
+        let tentative = parsed["tentative"] as? Bool ?? baseline.lowercased().contains("building")
+        return DecodeResult(translation: translation, patterns: patterns, baseline: baseline, tentative: tentative)
     }
 }
 
@@ -816,20 +938,18 @@ enum ClarityError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .apiFailed(let code): return "API failed (HTTP \(code))"
+        case .apiFailed(let code):     return "API failed (HTTP \(code))"
         case .apiMessage(let message): return message
-        case .badResponse: return "Unexpected API response"
+        case .badResponse:             return "Unexpected API response"
         }
     }
 }
 
 struct ActivityView: UIViewControllerRepresentable {
     let activityItems: [Any]
-
     func makeUIViewController(context: Context) -> UIActivityViewController {
         UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
     }
-
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
@@ -851,9 +971,7 @@ struct UIKitTextView: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: UITextView, context: Context) {
-        if uiView.text != text {
-            uiView.text = text
-        }
+        if uiView.text != text { uiView.text = text }
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -861,10 +979,37 @@ struct UIKitTextView: UIViewRepresentable {
     class Coordinator: NSObject, UITextViewDelegate {
         var parent: UIKitTextView
         init(_ parent: UIKitTextView) { self.parent = parent }
+        func textViewDidChange(_ textView: UITextView) { parent.text = textView.text }
+    }
+}
 
-        func textViewDidChange(_ textView: UITextView) {
-            parent.text = textView.text
-        }
+struct ClarityDecodeEntry: Codable {
+    let id: UUID; let timestamp: Date; let contact: String
+    let text: String; let sensitivity: String
+    let translation: String; let patterns: [String]; let baseline: String
+}
+
+final class ClarityDecodeStore {
+    static let shared = ClarityDecodeStore()
+    private let appGroupID = "group.com.alden.ndclarity"
+    private let fileName   = "clarity_decode_log.json"
+    private var logURL: URL? {
+        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupID)?.appendingPathComponent(fileName)
+    }
+    func load() -> [ClarityDecodeEntry] {
+        guard let url = logURL, let data = try? Data(contentsOf: url),
+              let entries = try? JSONDecoder().decode([ClarityDecodeEntry].self, from: data) else { return [] }
+        return entries
+    }
+    func messages(for contact: String) -> [ClarityDecodeEntry] {
+        guard !contact.isEmpty else { return [] }
+        return load().filter { $0.contact.lowercased() == contact.lowercased() }
+    }
+    func append(_ entry: ClarityDecodeEntry) {
+        var entries = load(); entries.append(entry)
+        if entries.count > 500 { entries = Array(entries.suffix(500)) }
+        guard let url = logURL, let data = try? JSONEncoder().encode(entries) else { return }
+        try? data.write(to: url, options: .atomic)
     }
 }
 
