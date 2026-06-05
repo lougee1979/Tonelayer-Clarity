@@ -81,6 +81,7 @@ struct ContentView: View {
     @State private var isDecoding          = false
     @State private var decodeTranslation   = ""
     @State private var decodePatterns: [String] = []
+    @State private var decodeCommStyle     = ""
     @State private var decodeBaseline      = ""
     @State private var decodeTentative     = false
     @State private var decodeStatus        = ""
@@ -794,7 +795,7 @@ struct ContentView: View {
                 Button { if let c = UIPasteboard.general.string, !c.isEmpty { decodeText = c } } label: {
                     Label("Paste", systemImage: "doc.on.clipboard").frame(maxWidth: .infinity)
                 }.buttonStyle(.bordered)
-                Button { decodeText = ""; decodeTranslation = ""; decodePatterns = []; decodeBaseline = "" } label: {
+                Button { decodeText = ""; decodeTranslation = ""; decodePatterns = []; decodeCommStyle = ""; decodeBaseline = "" } label: {
                     Label("Clear", systemImage: "xmark.circle").frame(maxWidth: .infinity)
                 }.buttonStyle(.bordered).disabled(decodeText.isEmpty)
             }
@@ -852,6 +853,14 @@ struct ContentView: View {
                     }
                 }
             }
+            if !decodeCommStyle.isEmpty && !decodeCommStyle.lowercased().hasPrefix("neutral") {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label("Communication style", systemImage: "brain.head.profile")
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(Color(red: 0.44, green: 0.18, blue: 0.62))
+                    Text(decodeCommStyle).font(.subheadline).foregroundStyle(Color(red: 0.12, green: 0.14, blue: 0.18))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
             if !decodeBaseline.isEmpty {
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "chart.line.uptrend.xyaxis").font(.system(size: 12))
@@ -888,7 +897,7 @@ struct ContentView: View {
                 await MainActor.run {
                     isDecoding = false; decodeStatus = ""
                     decodeTranslation = result.translation; decodePatterns = result.patterns
-                    decodeBaseline = result.baseline; decodeTentative = result.tentative
+                    decodeCommStyle = result.commStyle; decodeBaseline = result.baseline; decodeTentative = result.tentative
                     let contact = decodeContactName.trimmingCharacters(in: .whitespacesAndNewlines)
                     ClarityDecodeStore.shared.append(ClarityDecodeEntry(
                         id: UUID(), timestamp: Date(), contact: contact.isEmpty ? "Unknown" : contact,
@@ -902,7 +911,7 @@ struct ContentView: View {
         }
     }
 
-    private struct DecodeResult { let translation: String; let patterns: [String]; let baseline: String; let tentative: Bool }
+    private struct DecodeResult { let translation: String; let patterns: [String]; let commStyle: String; let baseline: String; let tentative: Bool }
 
     private func callDecode(text: String) async throws -> DecodeResult {
         let contact = decodeContactName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -925,10 +934,11 @@ struct ContentView: View {
         let translation = parsed["translation"] as? String ?? parsed["summary"] as? String ?? parsed["analysis"] as? String ?? ""
         guard !translation.isEmpty else { throw ClarityError.badResponse }
         let patterns = parsed["flags"] as? [String] ?? parsed["patterns"] as? [String] ?? []
+        let commStyle = parsed["communication_style"] as? String ?? ""
         let baseline = parsed["baseline_note"] as? String ?? parsed["baseline"] as? String ?? parsed["note"] as? String ?? ""
         let isDefinitive = parsed["is_definitive"] as? Bool ?? true
         let tentative = !isDefinitive || baseline.lowercased().contains("building")
-        return DecodeResult(translation: translation, patterns: patterns, baseline: baseline, tentative: tentative)
+        return DecodeResult(translation: translation, patterns: patterns, commStyle: commStyle, baseline: baseline, tentative: tentative)
     }
 }
 
