@@ -171,8 +171,8 @@ struct ContentView: View {
                 .frame(width: 88, height: 88)
                 .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
 
-            Text("Clarity")
-                .font(.system(size: 32, weight: .bold))
+            Text("ToneLayer Clarity")
+                .font(.system(size: 30, weight: .bold))
                 .foregroundStyle(Color.clarityGreen)
 
             Text("Rewrite NT speech so it lands more clearly for neurodivergent readers.")
