@@ -353,10 +353,20 @@ struct KeyboardView: View {
                         .shadow(color: Color.black.opacity(0.30), radius: 0, x: 0, y: 1)
                 }
                 .buttonStyle(.plain)
-                specialKey("return", width: 72) {
+                specialKey("return", width: 60) {
                     inputVC.textDocumentProxy.insertText("\n")
                     keyboardTypedText += "\n"
                 }
+                Button { inputVC.dismissKeyboard() } label: {
+                    Image(systemName: "keyboard.chevron.compact.down")
+                        .font(.system(size: 17))
+                        .frame(width: 44, height: 44)
+                        .background(Color.claritySpecialKey)
+                        .foregroundStyle(Color.keyboardText)
+                        .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                        .shadow(color: Color.black.opacity(0.22), radius: 0, x: 0, y: 1)
+                }
+                .buttonStyle(.plain)
             }
         }
     }
