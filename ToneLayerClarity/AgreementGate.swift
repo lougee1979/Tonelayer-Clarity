@@ -101,31 +101,34 @@ Clarity Beta Testing Agreement
 
 Last updated: June 2026
 
-Thank you for testing Clarity. This agreement covers the Clarity app and the Clarity keyboard extension. By accepting and entering the app you agree to the following.
+Thank you for testing ToneLayer Clarity. This agreement covers the ToneLayer Clarity app and the ToneLayer Clarity keyboard extension. By accepting and entering the app you agree to the following.
 
-1. YOU OWN WHAT YOU PROCESS
-You confirm that you have the right to share and process any text you enter into Clarity or the Clarity keyboard. Do not paste or submit text that belongs to someone else or that you do not have explicit permission to use. Clarity is not responsible for any copyright or intellectual-property claims arising from text you submit.
+1. INTELLECTUAL PROPERTY — THE APP
+ToneLayer Clarity, including its software, code, design, branding, AI prompts, and all associated content, is the exclusive intellectual property of the developer and is protected by copyright law. You may not copy, reproduce, modify, distribute, reverse-engineer, decompile, or create derivative works from ToneLayer Clarity or any of its components without explicit written permission from the developer. Unauthorized use constitutes copyright infringement and may result in legal action.
 
-2. BETA SOFTWARE — NO WARRANTIES
-Clarity is beta software. Features may change, crash, or produce unexpected results at any time without notice. Outputs are provided as-is and accuracy is not guaranteed. The developer is not liable for any direct or indirect loss, harm, or misunderstanding resulting from use during the beta period.
+2. YOU OWN WHAT YOU PROCESS
+You confirm that you have the right to share and process any text you enter into ToneLayer Clarity or the ToneLayer Clarity keyboard. Do not paste or submit text that belongs to someone else or that you do not have explicit permission to use. ToneLayer Clarity is not responsible for any copyright or intellectual-property claims arising from text you submit.
 
-3. NOT A SUBSTITUTE FOR PROFESSIONAL HELP
-Clarity is a communication aid. It is not a medical device, therapy tool, diagnostic service, or source of legal advice. It does not provide clinical, psychological, or legal guidance. If you need professional support, please speak with a qualified professional.
+3. BETA SOFTWARE — NO WARRANTIES
+ToneLayer Clarity is beta software. Features may change, crash, or produce unexpected results at any time without notice. Outputs are provided as-is and accuracy is not guaranteed. The developer is not liable for any direct or indirect loss, harm, or misunderstanding resulting from use during the beta period.
 
-4. YOUR TEXT IS PROCESSED ON OUR SERVER
-Messages you type in the app or keyboard are sent to tonelayer.app for AI processing. Your text is not permanently stored on the server. Do not enter sensitive personal information such as passwords, financial data, or private medical details. By using Clarity you consent to this processing.
+4. NOT A SUBSTITUTE FOR PROFESSIONAL HELP
+ToneLayer Clarity is a communication aid. It is not a medical device, therapy tool, diagnostic service, or source of legal advice. It does not provide clinical, psychological, or legal guidance. If you need professional support, please speak with a qualified professional.
 
-5. FEEDBACK
+5. YOUR TEXT IS PROCESSED ON OUR SERVER
+Messages you type in the app or keyboard are sent to tonelayer.app for AI processing. Your text is not permanently stored on the server. Do not enter sensitive personal information such as passwords, financial data, or private medical details. By using ToneLayer Clarity you consent to this processing.
+
+6. FEEDBACK
 As a beta tester you agree to report bugs, usability issues, and unexpected behavior using the feedback option in the app. Your feedback directly improves the app.
 
-6. CONFIDENTIALITY
+7. CONFIDENTIALITY
 Please do not share screenshots or video of beta features publicly without permission from the developer.
 
-7. CHANGES TO THIS AGREEMENT
+8. CHANGES TO THIS AGREEMENT
 This agreement may be updated before general release. You will be asked to re-read and accept any material changes.
 
 If you have questions, contact the developer through the app or at the support email provided on the App Store listing.
 
-Thank you for helping make Clarity better.
+Thank you for helping make ToneLayer Clarity better.
 """
 }
