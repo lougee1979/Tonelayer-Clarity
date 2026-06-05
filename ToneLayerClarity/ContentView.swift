@@ -171,12 +171,8 @@ struct ContentView: View {
                 .frame(width: 88, height: 88)
                 .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
 
-            Text("ToneLayer")
-                .font(.system(size: 32, weight: .bold))
-                .foregroundStyle(Color.clarityGreen)
-
             Text("Clarity")
-                .font(.headline.weight(.semibold))
+                .font(.system(size: 32, weight: .bold))
                 .foregroundStyle(Color.clarityGreen)
 
             Text("Rewrite NT speech so it lands more clearly for neurodivergent readers.")
@@ -513,7 +509,7 @@ struct ContentView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Label("AI processing consent", systemImage: "lock.shield")
                             .font(.headline)
-                        Text("ToneLayer sends only the message text you choose to clarify to the AI provider for rewriting. Do not include passwords, secrets, or medical record numbers in test messages.")
+                        Text("Clarity sends only the message text you choose to clarify to the AI provider for rewriting. Do not include passwords, secrets, or medical record numbers in test messages.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -777,7 +773,7 @@ struct ContentView: View {
             Label("Decoder", systemImage: "eye.circle.fill")
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(Color(red: 0.10, green: 0.36, blue: 0.86))
-            Text("Paste a message you received. ToneLayer reads it \u{2014} what it actually means, and any patterns worth knowing.")
+            Text("Paste a message you received. Clarity reads it \u{2014} what it actually means, and any patterns worth knowing.")
                 .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             VStack(alignment: .leading, spacing: 4) {
                 Text("Contact name").font(.caption.weight(.medium)).foregroundStyle(.secondary)
