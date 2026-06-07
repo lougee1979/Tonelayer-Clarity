@@ -175,9 +175,9 @@ struct KeyboardView: View {
                         defaults?.set(l, forKey: "rewriteLevel")
                     } label: {
                         Text(levelKeyTitle(l))
-                            .font(.system(size: 14, weight: level == l ? .bold : .semibold))
+                            .font(.system(size: 13, weight: level == l ? .bold : .semibold))
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 8)
+                            .padding(.vertical, 6)
                             .background(level == l ? Color.clarityAccent : Color.claritySpecialKey)
                             .foregroundStyle(level == l ? Color.white : Color.keyboardText)
                             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -346,9 +346,9 @@ struct KeyboardView: View {
                     keyboardTypedText += " "
                 } label: {
                     Text("space")
-                        .font(.system(size: 16))
+                        .font(.system(size: 14))
                         .frame(maxWidth: .infinity)
-                        .frame(height: 44)
+                        .frame(height: 36)
                         .background(Color.keyboardKey)
                         .foregroundStyle(Color.keyboardText)
                         .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
@@ -361,8 +361,8 @@ struct KeyboardView: View {
                 }
                 Button { inputVC.dismissKeyboard() } label: {
                     Image(systemName: "keyboard.chevron.compact.down")
-                        .font(.system(size: 17))
-                        .frame(width: 44, height: 44)
+                        .font(.system(size: 15))
+                        .frame(width: 36, height: 36)
                         .background(Color.claritySpecialKey)
                         .foregroundStyle(Color.keyboardText)
                         .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
@@ -389,9 +389,9 @@ struct KeyboardView: View {
             if isShifted { isShifted = false }
         } label: {
             Text(isShifted ? key.uppercased() : key)
-                .font(.system(size: 22))
+                .font(.system(size: 18))
                 .frame(maxWidth: .infinity)
-                .frame(height: 44)
+                .frame(height: 36)
                 .background(Color.keyboardKey)
                 .foregroundStyle(Color.keyboardText)
                 .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
@@ -403,10 +403,10 @@ struct KeyboardView: View {
     private func specialKey(_ title: String, width: CGFloat, highlighted: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 15, weight: .medium))
+                .font(.system(size: 13, weight: .medium))
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
-                .frame(width: width, height: 44)
+                .frame(width: width, height: 36)
                 .background(highlighted ? Color.clarityAccent : Color.claritySpecialKey)
                 .foregroundStyle(highlighted ? Color.white : Color.keyboardText)
                 .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
