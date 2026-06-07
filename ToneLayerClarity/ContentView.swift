@@ -59,6 +59,7 @@ struct ContentView: View {
     @State private var profilePTSD    = false
     @State private var profileCPTSD   = false
     @State private var goal = "Make clearer"
+    @State private var messageDirection = "They sent this to me"
     @State private var isRewriting = false
     @State private var status = ""
     @State private var clearerVersion = ""
@@ -95,6 +96,7 @@ struct ContentView: View {
     private let appGroupID      = "group.com.alden.ndclarity"
     private var sharedDefaults: UserDefaults? { UserDefaults(suiteName: appGroupID) }
     private let goals      = ["Make clearer", "Reduce anxiety", "Make actionable"]
+    private let messageDirections = ["They sent this to me", "I'm about to send this"]
     private let resultTabs = ["Original", "Rewrite", "Tone"]
     private let dailyTips: [(title: String, body: String)] = [
         (
@@ -182,7 +184,7 @@ struct ContentView: View {
 
             HStack(spacing: 10) {
                 statusPill(label: "Mode",      value: "Clarity")
-                statusPill(label: "Direction", value: "NT \u{2192} ND")
+                statusPill(label: "Direction", value: messageDirection == "I'm about to send this" ? "ND \u{2192} NT" : "NT \u{2192} ND")
                 statusPill(label: "Server",    value: "\u{2713} railway.app")
             }
         }
@@ -322,6 +324,14 @@ struct ContentView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Whose message is this?").font(.caption.weight(.medium)).foregroundStyle(.secondary)
+                Picker("Whose message is this?", selection: $messageDirection) {
+                    ForEach(messageDirections, id: \.self) { Text($0).tag($0) }
+                }
+                .pickerStyle(.segmented)
             }
 
             Picker("Goal", selection: $goal) {
@@ -741,8 +751,10 @@ struct ContentView: View {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue(appToken,           forHTTPHeaderField: "x-app-token")
         req.timeoutInterval = 90
+        let direction = messageDirection == "I'm about to send this" ? "outgoing" : "incoming"
         req.httpBody = try JSONSerialization.data(withJSONObject: [
-            "text": text, "profile": buildProfileString(), "level": goal, "mode": "clarity", "style": "Clarify"
+            "text": text, "profile": buildProfileString(), "level": goal, "mode": "clarity", "style": "Clarify",
+            "direction": direction
         ])
         let (data, response) = try await URLSession.shared.data(for: req)
         guard let http = response as? HTTPURLResponse else { throw ClarityError.apiFailed(0) }

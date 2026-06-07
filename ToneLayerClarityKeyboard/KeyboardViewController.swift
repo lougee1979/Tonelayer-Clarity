@@ -192,6 +192,8 @@ struct KeyboardView: View {
                 Text(status)
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             rewriteWindow
@@ -608,7 +610,10 @@ struct KeyboardView: View {
 
     private func showStatus(_ msg: String) {
         status = msg
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { status = "" }
+        let readingTime = max(2.5, Double(msg.count) * 0.05)
+        DispatchQueue.main.asyncAfter(deadline: .now() + readingTime) {
+            if status == msg { status = "" }
+        }
     }
 
     // MARK: - Server API
