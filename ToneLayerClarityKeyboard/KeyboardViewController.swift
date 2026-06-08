@@ -62,6 +62,7 @@ struct KeyboardView: View {
     @State private var isShifted          = false
     @State private var isNumbers          = false
     @State private var keyboardTypedText  = ""
+    @State private var keyboardWidth       = CGFloat(0)
     @State private var previewText        = ""
     @State private var pendingDeleteCount = 0
 
@@ -313,34 +314,43 @@ struct KeyboardView: View {
 
     // MARK: - Keyboard
 
+    /// Letter keys are perfect squares — side length derived from the keyboard's
+    /// measured width so they always tile evenly across the row (10 keys + 9 gaps).
+    private var keySize: CGFloat {
+        let spacing: CGFloat = 5
+        let columns: CGFloat = 10
+        guard keyboardWidth > 0 else { return 34 }
+        return (keyboardWidth - spacing * (columns - 1)) / columns
+    }
+
     private var qwertyKeyboard: some View {
         VStack(spacing: 6) {
             if isNumbers {
                 keyRow(["1","2","3","4","5","6","7","8","9","0"])
                 keyRow(["-","/",":",";","(",")","$","&","@","\""])
                 HStack(spacing: 5) {
-                    specialKey("ABC", width: 52) { isNumbers = false }
-                    keyRow([".",",","?","!","'"], flexible: true)
-                    specialKey("\u{232b}", width: 52) {
+                    specialKey("ABC", width: keySize * 1.4) { isNumbers = false }
+                    keyRow([".",",","?","!","'"])
+                    specialKey("\u{232b}", width: keySize * 1.4) {
                         inputVC.textDocumentProxy.deleteBackward()
                         if !keyboardTypedText.isEmpty { keyboardTypedText.removeLast() }
                     }
                 }
             } else {
                 keyRow(["q","w","e","r","t","y","u","i","o","p"])
-                keyRow(["a","s","d","f","g","h","j","k","l"]).padding(.horizontal, 18)
+                keyRow(["a","s","d","f","g","h","j","k","l"]).padding(.horizontal, keySize / 2)
                 HStack(spacing: 5) {
-                    specialKey(isShifted ? "\u{21e7}" : "\u{21e7}", width: 44, highlighted: isShifted) { isShifted.toggle() }
-                    keyRow(["z","x","c","v","b","n","m"], flexible: true)
-                    specialKey("\u{232b}", width: 44) {
+                    specialKey(isShifted ? "\u{21e7}" : "\u{21e7}", width: keySize * 1.3, highlighted: isShifted) { isShifted.toggle() }
+                    keyRow(["z","x","c","v","b","n","m"])
+                    specialKey("\u{232b}", width: keySize * 1.3) {
                         inputVC.textDocumentProxy.deleteBackward()
                         if !keyboardTypedText.isEmpty { keyboardTypedText.removeLast() }
                     }
                 }
             }
             HStack(spacing: 5) {
-                specialKey(isNumbers ? "ABC" : "123", width: 50) { isNumbers.toggle() }
-                specialKey("\u{1f310}", width: 44) { inputVC.advanceToNextInputMode() }
+                specialKey(isNumbers ? "ABC" : "123", width: keySize * 1.3) { isNumbers.toggle() }
+                specialKey("\u{1f310}", width: keySize * 1.1) { inputVC.advanceToNextInputMode() }
                 Button {
                     inputVC.textDocumentProxy.insertText(" ")
                     keyboardTypedText += " "
@@ -348,21 +358,21 @@ struct KeyboardView: View {
                     Text("space")
                         .font(.system(size: 14))
                         .frame(maxWidth: .infinity)
-                        .frame(height: 36)
+                        .frame(height: keySize)
                         .background(Color.keyboardKey)
                         .foregroundStyle(Color.keyboardText)
                         .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
                         .shadow(color: Color.black.opacity(0.30), radius: 0, x: 0, y: 1)
                 }
                 .buttonStyle(.plain)
-                specialKey("return", width: 60) {
+                specialKey("return", width: keySize * 1.6) {
                     inputVC.textDocumentProxy.insertText("\n")
                     keyboardTypedText += "\n"
                 }
                 Button { inputVC.dismissKeyboard() } label: {
                     Image(systemName: "keyboard.chevron.compact.down")
                         .font(.system(size: 15))
-                        .frame(width: 36, height: 36)
+                        .frame(width: keySize, height: keySize)
                         .background(Color.claritySpecialKey)
                         .foregroundStyle(Color.keyboardText)
                         .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
@@ -371,12 +381,19 @@ struct KeyboardView: View {
                 .buttonStyle(.plain)
             }
         }
+        .background(
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { keyboardWidth = geo.size.width }
+                    .onChange(of: geo.size.width) { _, newWidth in keyboardWidth = newWidth }
+            }
+        )
     }
 
-    private func keyRow(_ keys: [String], flexible: Bool = false) -> some View {
+    private func keyRow(_ keys: [String]) -> some View {
         HStack(spacing: 5) {
             ForEach(keys, id: \.self) { key in
-                letterKey(key).if(flexible) { $0.frame(maxWidth: .infinity) }
+                letterKey(key)
             }
         }
     }
@@ -390,8 +407,7 @@ struct KeyboardView: View {
         } label: {
             Text(isShifted ? key.uppercased() : key)
                 .font(.system(size: 18))
-                .frame(maxWidth: .infinity)
-                .frame(height: 36)
+                .frame(width: keySize, height: keySize)
                 .background(Color.keyboardKey)
                 .foregroundStyle(Color.keyboardText)
                 .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
@@ -406,7 +422,7 @@ struct KeyboardView: View {
                 .font(.system(size: 13, weight: .medium))
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
-                .frame(width: width, height: 36)
+                .frame(width: width, height: keySize)
                 .background(highlighted ? Color.clarityAccent : Color.claritySpecialKey)
                 .foregroundStyle(highlighted ? Color.white : Color.keyboardText)
                 .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
@@ -749,12 +765,5 @@ final class LogStore {
             .sorted { $0.value > $1.value }
             .prefix(3)
             .map { (pattern: $0.key, count: $0.value) }
-    }
-}
-
-private extension View {
-    @ViewBuilder
-    func `if`<Content: View>(_ condition: Bool, transform: (Self) -> Content) -> some View {
-        if condition { transform(self) } else { self }
     }
 }
