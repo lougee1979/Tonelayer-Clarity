@@ -4,6 +4,76 @@
 
 import UIKit
 import SwiftUI
+import Speech
+import AVFoundation
+
+// MARK: - Dictation
+
+@MainActor
+final class ClarityDictationManager: ObservableObject {
+    @Published var isRecording = false
+    @Published var partialText = ""
+
+    private let recognizer = SFSpeechRecognizer(locale: .current)
+    private var audioEngine = AVAudioEngine()
+    private var request: SFSpeechAudioBufferRecognitionRequest?
+    private var task: SFSpeechRecognitionTask?
+
+    func toggle(onInsert: @escaping (String) -> Void) {
+        if isRecording { finish(onInsert: onInsert) } else { start(onInsert: onInsert) }
+    }
+
+    private func start(onInsert: @escaping (String) -> Void) {
+        SFSpeechRecognizer.requestAuthorization { [weak self] status in
+            guard status == .authorized, let self else { return }
+            Task { @MainActor in self.beginRecording(onInsert: onInsert) }
+        }
+    }
+
+    private func beginRecording(onInsert: @escaping (String) -> Void) {
+        guard let recognizer, recognizer.isAvailable else { return }
+        do {
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.record, mode: .measurement, options: .duckOthers)
+            try session.setActive(true, options: .notifyOthersOnDeactivation)
+        } catch { return }
+
+        request = SFSpeechAudioBufferRecognitionRequest()
+        guard let request else { return }
+        request.shouldReportPartialResults = true
+
+        let inputNode = audioEngine.inputNode
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: inputNode.outputFormat(forBus: 0)) { [weak self] buf, _ in
+            self?.request?.append(buf)
+        }
+        try? audioEngine.prepare()
+        try? audioEngine.start()
+        isRecording = true
+
+        task = recognizer.recognitionTask(with: request) { [weak self] result, error in
+            guard let self else { return }
+            if let result {
+                self.partialText = result.bestTranscription.formattedString
+                if result.isFinal { self.finish(onInsert: onInsert) }
+            }
+            if error != nil { self.finish(onInsert: onInsert) }
+        }
+    }
+
+    func finish(onInsert: @escaping (String) -> Void) {
+        let text = partialText
+        audioEngine.stop()
+        if audioEngine.inputNode.numberOfInputs > 0 {
+            audioEngine.inputNode.removeTap(onBus: 0)
+        }
+        request?.endAudio()
+        task?.cancel()
+        request = nil
+        task = nil
+        isRecording = false
+        if !text.isEmpty { onInsert(text); partialText = "" }
+    }
+}
 
 // MARK: - Colors
 
@@ -55,6 +125,7 @@ struct KeyboardView: View {
     @State private var profileCPTSD   = false
     @State private var level              = "Medium"
     @State private var isRewriting        = false
+    @StateObject private var dictation    = ClarityDictationManager()
     @State private var status             = ""
     @State private var explanation        = ""
     @State private var showExpl           = true
@@ -174,7 +245,14 @@ struct KeyboardView: View {
             }
             clarityActionBar
                 .padding(.horizontal, 4)
-            if !status.isEmpty {
+            if dictation.isRecording && !dictation.partialText.isEmpty {
+                Text("🎤 " + dictation.partialText)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 8)
+                    .lineLimit(2)
+            } else if !status.isEmpty {
                 Text(status)
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
@@ -277,6 +355,19 @@ struct KeyboardView: View {
             rewriteChip("Brief", systemImage: nil) { rewrite(style: "Shorter") }
             rewriteChip("Warm", systemImage: nil) { rewrite(style: "Warmer") }
             rewriteChip("Direct", systemImage: nil) { rewrite(style: "Direct") }
+            Button {
+                dictation.toggle { text in
+                    inputVC.textDocumentProxy.insertText(text)
+                    keyboardTypedText += text
+                }
+            } label: {
+                Image(systemName: dictation.isRecording ? "stop.circle.fill" : "mic.fill")
+                    .font(.system(size: 13))
+                    .foregroundStyle(dictation.isRecording ? Color.red : Color.keyboardText)
+                    .frame(width: 28, height: 26)
+                    .background(dictation.isRecording ? Color.red.opacity(0.12) : Color.claritySpecialKey)
+                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            }
             Button { pasteClipboard() } label: {
                 Image(systemName: "doc.on.clipboard").font(.system(size: 12))
                     .frame(width: 28, height: 26)
