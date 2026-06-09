@@ -233,13 +233,13 @@ struct KeyboardView: View {
             }
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 6)
+        .padding(.vertical, 2)
     }
 
     // MARK: - Main panel
 
     private var mainPanel: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 2) {
             if !previewText.isEmpty {
                 compactPreview
             }
@@ -264,7 +264,7 @@ struct KeyboardView: View {
                 .padding(.horizontal, 4)
                 .padding(.bottom, 4)
         }
-        .padding(.top, 6)
+        .padding(.top, 2)
     }
 
     private var compactPreview: some View {
