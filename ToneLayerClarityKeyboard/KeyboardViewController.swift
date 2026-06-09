@@ -168,73 +168,72 @@ struct KeyboardView: View {
     // MARK: - Main panel
 
     private var mainPanel: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 6) {
-                ForEach(["Light", "Medium", "Strong"], id: \.self) { l in
-                    Button {
-                        level = l
-                        defaults?.set(l, forKey: "rewriteLevel")
-                    } label: {
-                        Text(levelKeyTitle(l))
-                            .font(.system(size: 13, weight: level == l ? .bold : .semibold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 6)
-                            .background(level == l ? Color.clarityAccent : Color.claritySpecialKey)
-                            .foregroundStyle(level == l ? Color.white : Color.keyboardText)
-                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("\(l) rewrite level")
-                }
+        VStack(spacing: 4) {
+            if !previewText.isEmpty {
+                compactPreview
             }
-            .padding(.horizontal, 8)
-
+            clarityActionBar
+                .padding(.horizontal, 4)
             if !status.isEmpty {
                 Text(status)
-                    .font(.system(size: 11))
+                    .font(.system(size: 10))
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 8)
+                    .lineLimit(1)
             }
-
-            rewriteWindow
-                .padding(.horizontal, 6)
-
-            rewriteActionRow
-                .padding(.horizontal, 4)
-
             qwertyKeyboard
                 .padding(.horizontal, 4)
                 .padding(.bottom, 4)
         }
-        .padding(.top, 8)
+        .padding(.top, 6)
     }
 
-    // MARK: - Action row
-
-    private var rewriteActionRow: some View {
-        HStack(spacing: 5) {
-            rewriteChip("Rewrite", systemImage: "sparkles") { rewrite(style: "Rewrite") }
-            rewriteChip("Brief",   systemImage: nil)         { rewrite(style: "Shorter") }
-            rewriteChip("Soften",  systemImage: nil)         { rewrite(style: "Warmer") }
-            rewriteChip("Direct",  systemImage: nil)         { rewrite(style: "Direct") }
-            rewriteChip("Paste",   systemImage: "doc.on.clipboard") { pasteClipboard() }
-        }
-    }
-
-    // MARK: - Preview window
-
-    private var rewriteWindow: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Color.clarityAccent)
-                Text("Clarity preview")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(Color.keyboardText)
-                Spacer()
-                if !previewText.isEmpty {
+    private var compactPreview: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(previewText)
+                .font(.system(size: 11))
+                .foregroundStyle(Color.keyboardText)
+                .lineLimit(3)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if showSpiral {
+                HStack(spacing: 6) {
+                    chipButton("Keep", primary: false) {
+                        previewText = ""
+                        pendingDeleteCount = 0
+                        showSpiral = false
+                    }
+                    chipButton("Grammar", primary: false) {
+                        previewText = spiralGrammar.isEmpty ? spiralOriginal : spiralGrammar
+                        showSpiral = false
+                    }
+                    chipButton("ND version", primary: true) {
+                        previewText = spiralNT
+                        showSpiral = false
+                    }
+                }
+            } else {
+                HStack(spacing: 6) {
+                    if showExpl && !explanation.isEmpty {
+                        Text(explanation)
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    Spacer()
+                    Button(action: applyPreview) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "checkmark.circle.fill")
+                            Text("Insert").fontWeight(.semibold)
+                        }
+                        .font(.system(size: 12))
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(Color.clarityAccent)
+                        .foregroundStyle(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
                     Button {
                         previewText = ""
                         pendingDeleteCount = 0
@@ -247,69 +246,44 @@ struct KeyboardView: View {
                     .buttonStyle(.plain)
                 }
             }
-
-            if !previewText.isEmpty {
-                Text(previewText)
-                    .font(.system(size: 11))
-                    .foregroundStyle(Color.keyboardText)
-                    .lineLimit(4)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                if showSpiral {
-                    Text("This may land differently than intended \u{2014} choose a version:")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
-                    HStack(spacing: 6) {
-                        chipButton("Keep original", primary: false) {
-                            previewText = ""
-                            pendingDeleteCount = 0
-                            showSpiral = false
-                        }
-                        chipButton("Grammar only", primary: false) {
-                            previewText = spiralGrammar.isEmpty ? spiralOriginal : spiralGrammar
-                            showSpiral = false
-                        }
-                        chipButton("ND version", primary: true) {
-                            previewText = spiralNT
-                            showSpiral = false
-                        }
-                    }
-                } else {
-                    if showExpl && !explanation.isEmpty {
-                        Text(explanation)
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                    }
-                    Button(action: applyPreview) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "checkmark.circle.fill")
-                            Text("Insert").fontWeight(.semibold)
-                        }
-                        .font(.system(size: 13))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 7)
-                        .background(Color.clarityAccent)
-                        .foregroundStyle(.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
-                }
-            } else {
-                Text("NT \u{2192} ND: make your message explicit and easy to parse.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
         }
-        .padding(10)
+        .padding(8)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.white.opacity(0.85))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.clarityAccent.opacity(0.25), lineWidth: 1)
-        )
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Color.clarityAccent.opacity(0.25), lineWidth: 1))
+        .padding(.horizontal, 6)
+    }
+
+    private var clarityActionBar: some View {
+        HStack(spacing: 4) {
+            ForEach(["Light", "Medium", "Strong"], id: \.self) { l in
+                Button {
+                    level = l
+                    defaults?.set(l, forKey: "rewriteLevel")
+                } label: {
+                    Text(levelKeyTitle(l))
+                        .font(.system(size: 10, weight: level == l ? .bold : .semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 5)
+                        .background(level == l ? Color.clarityAccent : Color.claritySpecialKey)
+                        .foregroundStyle(level == l ? Color.white : Color.keyboardText)
+                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+            Divider().frame(height: 20)
+            rewriteChip("✦", systemImage: nil) { rewrite(style: "Rewrite") }
+            rewriteChip("Brief", systemImage: nil) { rewrite(style: "Shorter") }
+            rewriteChip("Warm", systemImage: nil) { rewrite(style: "Warmer") }
+            rewriteChip("Direct", systemImage: nil) { rewrite(style: "Direct") }
+            Button { pasteClipboard() } label: {
+                Image(systemName: "doc.on.clipboard").font(.system(size: 12))
+                    .frame(width: 28, height: 26)
+                    .background(Color.claritySpecialKey)
+                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            }
+        }
     }
 
     // MARK: - Keyboard
@@ -322,6 +296,8 @@ struct KeyboardView: View {
         guard keyboardWidth > 0 else { return 34 }
         return (keyboardWidth - spacing * (columns - 1)) / columns
     }
+
+    private let keyHeight: CGFloat = 36
 
     private var qwertyKeyboard: some View {
         VStack(spacing: 6) {
@@ -338,7 +314,7 @@ struct KeyboardView: View {
                 }
             } else {
                 keyRow(["q","w","e","r","t","y","u","i","o","p"])
-                keyRow(["a","s","d","f","g","h","j","k","l"]).padding(.horizontal, keySize / 2)
+                keyRow(["a","s","d","f","g","h","j","k","l"]).padding(.horizontal, (keySize + 5) / 2)
                 HStack(spacing: 5) {
                     specialKey(isShifted ? "\u{21e7}" : "\u{21e7}", width: keySize * 1.3, highlighted: isShifted) { isShifted.toggle() }
                     keyRow(["z","x","c","v","b","n","m"])
@@ -358,7 +334,7 @@ struct KeyboardView: View {
                     Text("space")
                         .font(.system(size: 14))
                         .frame(maxWidth: .infinity)
-                        .frame(height: keySize)
+                        .frame(height: keyHeight)
                         .background(Color.keyboardKey)
                         .foregroundStyle(Color.keyboardText)
                         .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
@@ -372,7 +348,7 @@ struct KeyboardView: View {
                 Button { inputVC.dismissKeyboard() } label: {
                     Image(systemName: "keyboard.chevron.compact.down")
                         .font(.system(size: 15))
-                        .frame(width: keySize, height: keySize)
+                        .frame(width: keySize, height: keyHeight)
                         .background(Color.claritySpecialKey)
                         .foregroundStyle(Color.keyboardText)
                         .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
@@ -407,7 +383,7 @@ struct KeyboardView: View {
         } label: {
             Text(isShifted ? key.uppercased() : key)
                 .font(.system(size: 18))
-                .frame(width: keySize, height: keySize)
+                .frame(width: keySize, height: keyHeight)
                 .background(Color.keyboardKey)
                 .foregroundStyle(Color.keyboardText)
                 .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
@@ -422,7 +398,7 @@ struct KeyboardView: View {
                 .font(.system(size: 13, weight: .medium))
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
-                .frame(width: width, height: keySize)
+                .frame(width: width, height: keyHeight)
                 .background(highlighted ? Color.clarityAccent : Color.claritySpecialKey)
                 .foregroundStyle(highlighted ? Color.white : Color.keyboardText)
                 .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
