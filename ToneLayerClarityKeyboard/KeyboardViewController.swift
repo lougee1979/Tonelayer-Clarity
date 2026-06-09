@@ -243,8 +243,9 @@ struct KeyboardView: View {
             if !previewText.isEmpty {
                 compactPreview
             }
-            clarityActionBar
-                .padding(.horizontal, 4)
+            if sidePanelWidth < 30 {
+                clarityActionBar.padding(.horizontal, 4)
+            }
             if dictation.isRecording && !dictation.partialText.isEmpty {
                 Text("🎤 " + dictation.partialText)
                     .font(.system(size: 10))
@@ -260,9 +261,7 @@ struct KeyboardView: View {
                     .padding(.horizontal, 8)
                     .lineLimit(1)
             }
-            qwertyKeyboard
-                .padding(.horizontal, 4)
-                .padding(.bottom, 4)
+            keyboardSection.padding(.horizontal, 4).padding(.bottom, 4)
         }
         .padding(.top, 2)
     }
@@ -379,18 +378,36 @@ struct KeyboardView: View {
 
     // MARK: - Keyboard
 
-    /// Letter keys are perfect squares — side length derived from the keyboard's
-    /// measured width so they always tile evenly across the row (10 keys + 9 gaps).
     private var keySize: CGFloat {
-        let spacing: CGFloat = 5
-        let columns: CGFloat = 10
         guard keyboardWidth > 0 else { return 34 }
-        return (keyboardWidth - spacing * (columns - 1)) / columns
+        return min((keyboardWidth - 5 * 9) / 10, 44)
     }
 
-    private var keyHeight: CGFloat { min(keySize, 42) }
+    private var keyHeight: CGFloat { keySize }
+    private var keyAreaWidth: CGFloat { keySize * 10 + 5 * 9 }
+    private var sidePanelWidth: CGFloat { max(0, (keyboardWidth - keyAreaWidth) / 2) }
 
-    private var qwertyKeyboard: some View {
+    private var keyboardSection: some View {
+        HStack(alignment: .top, spacing: 0) {
+            if sidePanelWidth >= 30 {
+                clarityLeftPanel.frame(width: sidePanelWidth)
+            }
+            centerKeyRows.frame(width: keyboardWidth > 0 ? keyAreaWidth : nil)
+            if sidePanelWidth >= 30 {
+                clarityRightPanel.frame(width: sidePanelWidth)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .background(
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { keyboardWidth = geo.size.width }
+                    .onChange(of: geo.size.width) { _, newWidth in keyboardWidth = newWidth }
+            }
+        )
+    }
+
+    private var centerKeyRows: some View {
         VStack(spacing: 6) {
             if isNumbers {
                 keyRow(["1","2","3","4","5","6","7","8","9","0"])
@@ -436,25 +453,92 @@ struct KeyboardView: View {
                     inputVC.textDocumentProxy.insertText("\n")
                     keyboardTypedText += "\n"
                 }
-                Button { inputVC.dismissKeyboard() } label: {
-                    Image(systemName: "keyboard.chevron.compact.down")
-                        .font(.system(size: 15))
-                        .frame(width: keySize, height: keyHeight)
-                        .background(Color.claritySpecialKey)
-                        .foregroundStyle(Color.keyboardText)
-                        .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
-                        .shadow(color: Color.black.opacity(0.22), radius: 0, x: 0, y: 1)
+            }
+        }
+    }
+
+    private var clarityLeftPanel: some View {
+        VStack(spacing: 5) {
+            ForEach(["Light", "Medium", "Strong"], id: \.self) { l in
+                Button {
+                    level = l
+                    defaults?.set(l, forKey: "rewriteLevel")
+                } label: {
+                    Text(levelKeyTitle(l))
+                        .font(.system(size: 11, weight: level == l ? .bold : .semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 5)
+                        .background(level == l ? Color.clarityAccent : Color.claritySpecialKey)
+                        .foregroundStyle(level == l ? Color.white : Color.keyboardText)
+                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                 }
                 .buttonStyle(.plain)
             }
-        }
-        .background(
-            GeometryReader { geo in
-                Color.clear
-                    .onAppear { keyboardWidth = geo.size.width }
-                    .onChange(of: geo.size.width) { _, newWidth in keyboardWidth = newWidth }
+            Spacer()
+            Button { rewrite(style: "Rewrite") } label: {
+                HStack(spacing: 3) {
+                    if isRewriting { ProgressView().scaleEffect(0.6).tint(.white) }
+                    else { Text("✦").font(.system(size: 12)) }
+                    Text(isRewriting ? "…" : "Rewrite")
+                        .font(.system(size: 11, weight: .bold)).lineLimit(1)
+                }
+                .frame(maxWidth: .infinity).padding(.vertical, 6)
+                .background(isRewriting ? Color.clarityAccent.opacity(0.55) : Color.clarityAccent)
+                .foregroundStyle(.white)
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             }
-        )
+            .disabled(isRewriting)
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 5).padding(.vertical, 1)
+    }
+
+    private var clarityRightPanel: some View {
+        VStack(spacing: 5) {
+            ForEach([("Brief", "Shorter"), ("Warm", "Warmer"), ("Direct", "Direct")], id: \.0) { label, style in
+                Button { rewrite(style: style) } label: {
+                    Text(label)
+                        .font(.system(size: 11, weight: .semibold)).lineLimit(1)
+                        .frame(maxWidth: .infinity).padding(.vertical, 5)
+                        .background(Color.claritySpecialKey)
+                        .foregroundStyle(Color.keyboardText)
+                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                }
+                .disabled(isRewriting)
+                .buttonStyle(.plain)
+            }
+            Spacer()
+            Button {
+                dictation.toggle { text in
+                    inputVC.textDocumentProxy.insertText(text)
+                    keyboardTypedText += text
+                }
+            } label: {
+                VStack(spacing: 2) {
+                    Image(systemName: dictation.isRecording ? "stop.circle.fill" : "mic.fill")
+                        .font(.system(size: 13))
+                    Text(dictation.isRecording ? "Stop" : "Mic")
+                        .font(.system(size: 9))
+                }
+                .foregroundStyle(dictation.isRecording ? Color.red : Color.secondary)
+                .frame(maxWidth: .infinity).padding(.vertical, 5)
+                .background(dictation.isRecording ? Color.red.opacity(0.12) : Color.claritySpecialKey)
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            Button { pasteClipboard() } label: {
+                VStack(spacing: 2) {
+                    Image(systemName: "doc.on.clipboard").font(.system(size: 13))
+                    Text("Paste").font(.system(size: 9))
+                }
+                .foregroundStyle(Color.secondary)
+                .frame(maxWidth: .infinity).padding(.vertical, 5)
+                .background(Color.claritySpecialKey)
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 5).padding(.vertical, 1)
     }
 
     private func keyRow(_ keys: [String]) -> some View {
