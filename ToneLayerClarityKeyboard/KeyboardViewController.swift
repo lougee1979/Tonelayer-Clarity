@@ -267,12 +267,25 @@ struct KeyboardView: View {
     }
 
     private var compactPreview: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(previewText)
-                .font(.system(size: 11))
-                .foregroundStyle(Color.keyboardText)
-                .lineLimit(3)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(alignment: .leading, spacing: 6) {
+            ScrollView(.vertical, showsIndicators: true) {
+                Text(previewText)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.keyboardText)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxHeight: 80)
+            if showExpl && !explanation.isEmpty {
+                ScrollView(.vertical, showsIndicators: true) {
+                    Text(explanation)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxHeight: 44)
+            }
             if showSpiral {
                 HStack(spacing: 6) {
                     chipButton("Keep", primary: false) {
@@ -291,13 +304,6 @@ struct KeyboardView: View {
                 }
             } else {
                 HStack(spacing: 6) {
-                    if showExpl && !explanation.isEmpty {
-                        Text(explanation)
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
                     Spacer()
                     Button(action: applyPreview) {
                         HStack(spacing: 4) {
@@ -315,6 +321,7 @@ struct KeyboardView: View {
                         previewText = ""
                         pendingDeleteCount = 0
                         showSpiral = false
+                        explanation = ""
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(.secondary)
