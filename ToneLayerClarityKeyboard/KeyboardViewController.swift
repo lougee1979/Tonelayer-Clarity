@@ -136,6 +136,8 @@ struct KeyboardView: View {
     @State private var keyboardWidth       = CGFloat(0)
     @State private var previewText        = ""
     @State private var pendingDeleteCount = 0
+    @State private var teachingBody       = ""
+    @State private var showTeachingExpanded = false
 
     // Spiral state
     @State private var showSpiral          = false
@@ -160,6 +162,8 @@ struct KeyboardView: View {
             Divider()
             if !agreed {
                 agreementRequiredView
+            } else if showTeachingExpanded {
+                clarityTeachingExpandedView.transition(.move(edge: .top).combined(with: .opacity))
             } else {
                 mainPanel
             }
@@ -240,6 +244,7 @@ struct KeyboardView: View {
 
     private var mainPanel: some View {
         VStack(spacing: 2) {
+            clarityTeachingStrip
             if !previewText.isEmpty {
                 compactPreview
             }
@@ -264,6 +269,71 @@ struct KeyboardView: View {
             keyboardSection.padding(.horizontal, 4).padding(.bottom, 4)
         }
         .padding(.top, 2)
+    }
+
+    private var clarityTeachingStrip: some View {
+        Button {
+            if !teachingBody.isEmpty { withAnimation { showTeachingExpanded = true } }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "lightbulb.fill")
+                    .font(.system(size: 9))
+                    .foregroundStyle(Color.clarityAccent)
+                Text(teachingBody.isEmpty ? "Tap Rewrite to see a teaching note" : teachingBody)
+                    .font(.system(size: 10))
+                    .foregroundStyle(teachingBody.isEmpty ? Color(UIColor.tertiaryLabel) : Color.keyboardText)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if !teachingBody.isEmpty {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(Color.clarityAccent)
+                }
+            }
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            .background(Color(UIColor.systemBackground).opacity(0.8))
+            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 6)
+    }
+
+    private var clarityTeachingExpandedView: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                HStack(spacing: 5) {
+                    Image(systemName: "lightbulb.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.clarityAccent)
+                    Text("Teaching note")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(Color.clarityAccent)
+                }
+                Spacer()
+                Button { withAnimation { showTeachingExpanded = false } } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+            ScrollView(.vertical, showsIndicators: true) {
+                Text(teachingBody)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.keyboardText)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.bottom, 4)
+            }
+            .frame(maxHeight: 170)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.white.opacity(0.9))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.clarityAccent.opacity(0.35), lineWidth: 1))
+        .padding(.horizontal, 8).padding(.vertical, 6)
     }
 
     private var compactPreview: some View {
@@ -672,6 +742,7 @@ struct KeyboardView: View {
             ? true : (defaults?.bool(forKey: "spiralPauseEnabled") ?? true)
         showExpl = defaults?.object(forKey: "showExplanation") == nil
             ? true : (defaults?.bool(forKey: "showExplanation") ?? true)
+        teachingBody = defaults?.string(forKey: "lastClarityTeachingNote") ?? ""
     }
 
     // MARK: - Rewrite
@@ -722,9 +793,11 @@ struct KeyboardView: View {
                         spiralOriginalCount = totalToDelete
                         withAnimation { showSpiral = true }
                     } else {
-                        if showExpl && !result.explanation.isEmpty { explanation = result.explanation }
+                        let note = result.explanation.isEmpty ? "Rewritten at \(level) for \(activeProfiles)." : result.explanation
+                        teachingBody = note
+                        defaults?.set(note, forKey: "lastClarityTeachingNote")
                         incrementMetric("keyboard.clarity.rewrite.success")
-                        showStatus("Review and tap Insert")
+                        showStatus("Review the rewrite above \u{2191}")
                         saveLog(original: full, result: result)
                     }
                 }
