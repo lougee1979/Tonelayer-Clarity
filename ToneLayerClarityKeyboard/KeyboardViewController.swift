@@ -198,7 +198,7 @@ struct KeyboardView: View {
 
     private var topBar: some View {
         HStack(spacing: 10) {
-            Image(systemName: "yin.yang")
+            Image(systemName: "yinyang")
                 .foregroundStyle(Color.clarityAccent)
                 .font(.system(size: 15))
             VStack(alignment: .leading, spacing: 1) {
