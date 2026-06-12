@@ -22,7 +22,7 @@ struct ClarityAgreementGate: View {
     private var agreementScreen: some View {
         ZStack {
             LinearGradient(
-                colors: [Color(red: 0.878, green: 0.855, blue: 0.988), Color(red: 0.769, green: 0.729, blue: 0.976)],
+                colors: [Color(red: 0.918, green: 0.898, blue: 0.984), Color(red: 0.749, green: 0.820, blue: 0.996)],
                 startPoint: .topLeading, endPoint: .bottomTrailing
             )
             .ignoresSafeArea()
@@ -31,9 +31,9 @@ struct ClarityAgreementGate: View {
                 VStack(spacing: 8) {
                     Image(systemName: "yin.yang")
                         .font(.system(size: 46, weight: .light))
-                        .foregroundStyle(Color(red: 0.435, green: 0.310, blue: 0.745))
+                        .foregroundStyle(Color.brandVioletDark)
                     Text("Clarity").font(.system(size: 30, weight: .bold))
-                        .foregroundStyle(Color(red: 0.300, green: 0.200, blue: 0.600))
+                        .foregroundStyle(Color(red: 0.220, green: 0.122, blue: 0.584))
                     Text("Beta Testing Agreement").font(.system(size: 14, weight: .medium)).foregroundStyle(.secondary)
                 }
                 .padding(.top, 52).padding(.bottom, 24)
@@ -58,7 +58,7 @@ struct ClarityAgreementGate: View {
                         HStack(alignment: .top, spacing: 12) {
                             Image(systemName: accepted ? "checkmark.square.fill" : "square")
                                 .font(.system(size: 22))
-                                .foregroundStyle(accepted ? Color(red: 0.435, green: 0.310, blue: 0.745) : .secondary)
+                                .foregroundStyle(accepted ? Color.brandVioletDark : .secondary)
                                 .frame(width: 28)
                             Text("I have read and agree to the Clarity Beta Testing Agreement, including use of the Clarity keyboard extension.")
                                 .font(.system(size: 13))
@@ -82,7 +82,7 @@ struct ClarityAgreementGate: View {
                             .padding(.vertical, 16)
                             .background(
                                 accepted
-                                    ? Color(red: 0.435, green: 0.310, blue: 0.745)
+                                    ? Color.brandVioletDark
                                     : Color(red: 0.6, green: 0.6, blue: 0.7)
                             )
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))

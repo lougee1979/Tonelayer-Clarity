@@ -11,42 +11,69 @@ import SwiftUI
 import UIKit
 
 extension Color {
-    static let toneLayerBlue     = Color(red: 0.376, green: 0.722, blue: 0.973)
-    static let toneLayerBlueSoft = Color(red: 0.859, green: 0.941, blue: 0.996)
-    static let clarityGreen      = Color(red: 0.482, green: 0.333, blue: 0.847)
-    static let clarityGreenSoft  = Color(red: 0.918, green: 0.898, blue: 0.980)
-    static let appNeutral  = Color(red: 0.322, green: 0.322, blue: 0.357)
-    static let appSurface  = Color(red: 0.945, green: 0.941, blue: 0.984)
-    static let cardSurface = Color.white
+    // ToneLayer brand palette — kept identical to the orange-folder app so
+    // Clarity matches its look.
+    static let brandVioletDark = Color(red: 0.369, green: 0.122, blue: 0.784)
+    static let brandViolet     = Color(red: 0.220, green: 0.502, blue: 0.973)
+    static let brandGreen      = Color(red: 0.608, green: 0.247, blue: 0.910)
+    static let brandWhite      = Color(red: 0.976, green: 0.969, blue: 1.000)
+    static let brandGreenMist  = Color(red: 0.882, green: 0.914, blue: 0.996)
+    static let brandVioletMist = Color(red: 0.929, green: 0.878, blue: 1.000)
 
-    static let brandVioletDark  = clarityGreen
-    static let brandViolet      = toneLayerBlue
-    static let brandGreen       = clarityGreen
-    static let brandWhite       = cardSurface
-    static let brandVioletMist  = clarityGreenSoft
-    static let brandGreenMist   = toneLayerBlueSoft
+    // Legacy Clarity aliases, remapped onto the brand palette above so every
+    // existing reference in this file picks up the new look automatically.
+    static let toneLayerBlue     = brandViolet
+    static let toneLayerBlueSoft = brandGreenMist
+    static let clarityGreen      = brandVioletDark
+    static let clarityGreenSoft  = brandVioletMist
+    static let appNeutral  = Color(red: 0.322, green: 0.322, blue: 0.357)
+    static let appSurface  = Color(red: 0.945, green: 0.937, blue: 0.984)
+    static let cardSurface = brandWhite
+}
+
+extension View {
+    func appBackground() -> some View {
+        self
+            .background(Color(red: 0.945, green: 0.937, blue: 0.984))
+            .preferredColorScheme(.light)
+    }
 }
 
 struct GlassCard: ViewModifier {
-    var tint: Color = .brandVioletDark
+    var tint: Color = .brandGreen
     var cornerRadius: CGFloat = 24
 
     func body(content: Content) -> some View {
         content
             .background(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(Color.cardSurface)
+                    .fill(.ultraThinMaterial)
+                    .overlay(
+                        LinearGradient(
+                            colors: [Color.brandWhite.opacity(0.42), tint.opacity(0.16), Color.brandViolet.opacity(0.14), Color.brandVioletDark.opacity(0.10)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                    )
             )
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(tint.opacity(0.22), lineWidth: 1)
+                    .stroke(
+                        LinearGradient(
+                            colors: [Color.brandWhite.opacity(0.78), tint.opacity(0.42), Color.brandViolet.opacity(0.34), Color.brandVioletDark.opacity(0.24)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
             )
-            .shadow(color: tint.opacity(0.08), radius: 10, x: 0, y: 5)
+            .shadow(color: tint.opacity(0.10), radius: 18, x: 0, y: 10)
     }
 }
 
 extension View {
-    func glassCard(tint: Color = .brandVioletDark, cornerRadius: CGFloat = 24) -> some View {
+    func glassCard(tint: Color = .brandGreen, cornerRadius: CGFloat = 24) -> some View {
         modifier(GlassCard(tint: tint, cornerRadius: cornerRadius))
     }
 }
@@ -86,6 +113,9 @@ struct ContentView: View {
     @State private var decodeBaseline      = ""
     @State private var decodeTentative     = false
     @State private var decodeStatus        = ""
+    @State private var decodeSenderADHD    = false
+    @State private var decodeSenderAutism  = false
+    @State private var decodeSenderPTSD    = false
 
     private let serverURL = "https://tonelayer-server-production.up.railway.app/rewrite"
     private let decodeURL = "https://tonelayer-server-production.up.railway.app/decode"
@@ -141,8 +171,7 @@ struct ContentView: View {
             }
             .padding()
         }
-        .background(Color.appSurface)
-        .preferredColorScheme(.light)
+        .appBackground()
         .onAppear {
             showTeaching = true
             if UserDefaults.standard.object(forKey: showTeachingKey) != nil {
@@ -155,6 +184,9 @@ struct ContentView: View {
             profileAUDHD  = UserDefaults.standard.bool(forKey: "ndprofile.audhd")
             profilePTSD   = UserDefaults.standard.bool(forKey: "ndprofile.ptsd")
             profileCPTSD  = UserDefaults.standard.bool(forKey: "ndprofile.cptsd")
+            decodeSenderADHD   = UserDefaults.standard.bool(forKey: "decode.senderProfile.adhd")
+            decodeSenderAutism = UserDefaults.standard.bool(forKey: "decode.senderProfile.autism")
+            decodeSenderPTSD   = UserDefaults.standard.bool(forKey: "decode.senderProfile.ptsd")
             syncKeyboardSettings()
         }
         .sheet(isPresented: $showingExportSheet) {
@@ -573,6 +605,36 @@ struct ContentView: View {
         .buttonStyle(.plain)
     }
 
+    private func senderProfileCheckbox(_ label: String, isOn: Binding<Bool>, key: String) -> some View {
+        Button {
+            isOn.wrappedValue.toggle()
+            UserDefaults.standard.set(isOn.wrappedValue, forKey: key)
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: isOn.wrappedValue ? "checkmark.square.fill" : "square")
+                    .foregroundStyle(isOn.wrappedValue ? Color(red: 0.10, green: 0.36, blue: 0.86) : Color.secondary)
+                    .font(.callout)
+                Text(label)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.primary)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity)
+            .background(isOn.wrappedValue ? Color(red: 0.89, green: 0.93, blue: 1.00) : Color(.tertiarySystemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func decodeSenderProfileString() -> String {
+        var p: [String] = []
+        if decodeSenderADHD   { p.append("ADHD") }
+        if decodeSenderAutism { p.append("Autism") }
+        if decodeSenderPTSD   { p.append("PTSD") }
+        return p.joined(separator: ", ")
+    }
+
     private var messageLengthNotice: some View {
         let words = draft.trimmingCharacters(in: .whitespacesAndNewlines)
             .split { $0.isWhitespace || $0.isNewline }
@@ -820,6 +882,16 @@ struct ContentView: View {
                      : decodeSensitivity == "Medium" ? "Flags moderate patterns and clear signals."
                      : "Flags subtle patterns. May over-flag.").font(.caption).foregroundStyle(.secondary)
             }
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Sender may have (optional)").font(.caption.weight(.medium)).foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    senderProfileCheckbox("ADHD", isOn: $decodeSenderADHD, key: "decode.senderProfile.adhd")
+                    senderProfileCheckbox("Autism", isOn: $decodeSenderAutism, key: "decode.senderProfile.autism")
+                    senderProfileCheckbox("PTSD", isOn: $decodeSenderPTSD, key: "decode.senderProfile.ptsd")
+                }
+                Text("Helps Clarity read bluntness, info-dumps, or literal phrasing as communication style rather than rudeness.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Button(action: startDecode) {
                 HStack {
                     if isDecoding { ProgressView().tint(.white) } else { Image(systemName: "eye") }
@@ -936,6 +1008,7 @@ struct ContentView: View {
         req.httpBody = try JSONSerialization.data(withJSONObject: [
             "text": text, "contact": contact.isEmpty ? "Unknown" : contact,
             "sensitivity": decodeSensitivity,
+            "senderProfile": decodeSenderProfileString(),
             "history": history.suffix(10).map { ["text": $0.text, "patterns": $0.patterns] }
         ])
         let (data, response) = try await URLSession.shared.data(for: req)

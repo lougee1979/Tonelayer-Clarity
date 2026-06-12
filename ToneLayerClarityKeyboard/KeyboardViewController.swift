@@ -82,8 +82,12 @@ extension Color {
     static let clarityAccent     = Color(red: 0.435, green: 0.310, blue: 0.745)
     static let clarityBackground = Color(red: 0.89,  green: 0.85,  blue: 0.99)
     static let claritySpecialKey = Color(UIColor.systemGray4)
-    static let keyboardKey       = Color.white
-    static let keyboardText      = Color(red: 0.08, green: 0.10, blue: 0.12)
+    static let keyboardKey = Color(UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.42, green: 0.42, blue: 0.44, alpha: 1.0)
+            : UIColor.white
+    })
+    static let keyboardText = Color(UIColor.label)
 }
 
 // MARK: - Principal class
@@ -128,24 +132,17 @@ struct KeyboardView: View {
     @State private var isRewriting        = false
     @StateObject private var dictation    = ClarityDictationManager()
     @State private var status             = ""
-    @State private var explanation        = ""
-    @State private var showExpl           = true
     @State private var spiralEnabled      = true
     @State private var isShifted          = false
     @State private var isNumbers          = false
     @State private var keyboardTypedText  = ""
     @State private var keyboardWidth       = CGFloat(0)
     @State private var previewText        = ""
+    @State private var previewGrammar     = ""
     @State private var pendingDeleteCount = 0
     @State private var teachingBody       = ""
     @State private var showTeachingExpanded = false
-
-    // Spiral state
     @State private var showSpiral          = false
-    @State private var spiralNT            = ""
-    @State private var spiralGrammar       = ""
-    @State private var spiralOriginal      = ""
-    @State private var spiralOriginalCount = 0
 
     private var activeProfiles: String {
         var p: [String] = []
@@ -165,6 +162,8 @@ struct KeyboardView: View {
                 agreementRequiredView
             } else if showTeachingExpanded {
                 clarityTeachingExpandedView.transition(.move(edge: .top).combined(with: .opacity))
+            } else if !previewText.isEmpty {
+                clarityRewriteResultView.transition(.move(edge: .top).combined(with: .opacity))
             } else {
                 mainPanel
             }
@@ -246,9 +245,6 @@ struct KeyboardView: View {
     private var mainPanel: some View {
         VStack(spacing: 2) {
             clarityTeachingStrip
-            if !previewText.isEmpty {
-                compactPreview
-            }
             if sidePanelWidth < 30 {
                 clarityActionBar.padding(.horizontal, 4)
             }
@@ -337,77 +333,62 @@ struct KeyboardView: View {
         .padding(.horizontal, 8).padding(.vertical, 6)
     }
 
-    private var compactPreview: some View {
-        VStack(alignment: .leading, spacing: 6) {
+    private var clarityRewriteResultView: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if showSpiral {
+                Text("\u{1F49A} Pause for a sec?")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Color.clarityAccent)
+                Text("This phrasing might land differently than you intend. Here's an ND-friendly version \u{2014} or pick another option.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("\u{2728} Here's the rewrite")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Color.clarityAccent)
+            }
             ScrollView(.vertical, showsIndicators: true) {
                 Text(previewText)
-                    .font(.system(size: 11))
+                    .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(Color.keyboardText)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .frame(maxHeight: 80)
-            if showExpl && !explanation.isEmpty {
-                ScrollView(.vertical, showsIndicators: true) {
-                    Text(explanation)
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .fixedSize(horizontal: false, vertical: true)
+            .frame(maxHeight: 140)
+            HStack(spacing: 8) {
+                chipButton("Original", primary: false) {
+                    previewText = ""
+                    previewGrammar = ""
+                    pendingDeleteCount = 0
+                    showSpiral = false
+                    showStatus("Kept your original")
                 }
-                .frame(maxHeight: 44)
+                chipButton("Grammar", primary: false) {
+                    applyPreview(previewGrammar.isEmpty ? previewText : previewGrammar)
+                }
+                chipButton("Use ND \u{2713}", primary: true) {
+                    applyPreview(previewText)
+                }
             }
-            if showSpiral {
-                HStack(spacing: 6) {
-                    chipButton("Keep", primary: false) {
-                        previewText = ""
-                        pendingDeleteCount = 0
-                        showSpiral = false
-                    }
-                    chipButton("Grammar", primary: false) {
-                        previewText = spiralGrammar.isEmpty ? spiralOriginal : spiralGrammar
-                        showSpiral = false
-                    }
-                    chipButton("ND version", primary: true) {
-                        previewText = spiralNT
-                        showSpiral = false
-                    }
-                }
-            } else {
-                HStack(spacing: 6) {
-                    Spacer()
-                    Button(action: applyPreview) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "checkmark.circle.fill")
-                            Text("Insert").fontWeight(.semibold)
-                        }
-                        .font(.system(size: 12))
-                        .padding(.horizontal, 10).padding(.vertical, 5)
-                        .background(Color.clarityAccent)
-                        .foregroundStyle(.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
-                    Button {
-                        previewText = ""
-                        pendingDeleteCount = 0
-                        showSpiral = false
-                        explanation = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                            .font(.system(size: 16))
-                    }
-                    .buttonStyle(.plain)
+            if !teachingBody.isEmpty {
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: "lightbulb.fill")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Color.clarityAccent.opacity(0.8))
+                    Text(teachingBody)
+                        .font(.system(size: 11))
+                        .italic()
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
-        .padding(8)
+        .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.white.opacity(0.85))
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Color.clarityAccent.opacity(0.25), lineWidth: 1))
-        .padding(.horizontal, 6)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.clarityAccent.opacity(0.35), lineWidth: 1))
+        .padding(.horizontal, 12).padding(.vertical, 8)
     }
 
     private var clarityActionBar: some View {
@@ -428,7 +409,7 @@ struct KeyboardView: View {
                 .buttonStyle(.plain)
             }
             Divider().frame(height: 20)
-            rewriteChip("✦", systemImage: nil) { rewrite(style: "Rewrite") }
+            rewriteChip("Rewrite", systemImage: "arrow.triangle.2.circlepath") { rewrite(style: "Rewrite") }
             rewriteChip("Brief", systemImage: nil) { rewrite(style: "Shorter") }
             rewriteChip("Warm", systemImage: nil) { rewrite(style: "Warmer") }
             rewriteChip("Direct", systemImage: nil) { rewrite(style: "Direct") }
@@ -468,6 +449,14 @@ struct KeyboardView: View {
     private var keyHeight: CGFloat { keySize }
     private var keyAreaWidth: CGFloat { keySize * 10 + 5 * 9 }
 
+    /// Width for the shift/delete keys on the z-row so that row totals
+    /// keyAreaWidth exactly (matches the q-row and a-row above it).
+    private var letterEdgeKeyWidth: CGFloat { keySize * 1.5 + 2.5 }
+
+    /// Width for the "ABC"/delete keys on the numbers row's bottom row so
+    /// that row totals keyAreaWidth exactly.
+    private var numberEdgeKeyWidth: CGFloat { keySize * 2.5 + 7.5 }
+
     /// On iPad the spare width goes to side action panels (like Apple's
     /// modifier columns) so the 10-key block stays square and centered.
     /// 625 ≈ the key block width at the 58pt square cap (58*10 + 5*9).
@@ -504,9 +493,9 @@ struct KeyboardView: View {
                 keyRow(["1","2","3","4","5","6","7","8","9","0"])
                 keyRow(["-","/",":",";","(",")","$","&","@","\""])
                 HStack(spacing: 5) {
-                    specialKey("ABC", width: keySize * 1.4) { isNumbers = false }
+                    specialKey("ABC", width: numberEdgeKeyWidth) { isNumbers = false }
                     keyRow([".",",","?","!","'"])
-                    specialKey("\u{232b}", width: keySize * 1.4) {
+                    specialKey("\u{232b}", width: numberEdgeKeyWidth) {
                         inputVC.textDocumentProxy.deleteBackward()
                         if !keyboardTypedText.isEmpty { keyboardTypedText.removeLast() }
                     }
@@ -515,9 +504,9 @@ struct KeyboardView: View {
                 keyRow(["q","w","e","r","t","y","u","i","o","p"])
                 keyRow(["a","s","d","f","g","h","j","k","l"]).padding(.horizontal, (keySize + 5) / 2)
                 HStack(spacing: 5) {
-                    specialKey(isShifted ? "\u{21e7}" : "\u{21e7}", width: keySize * 1.3, highlighted: isShifted) { isShifted.toggle() }
+                    specialKey(isShifted ? "\u{21e7}" : "\u{21e7}", width: letterEdgeKeyWidth, highlighted: isShifted) { isShifted.toggle() }
                     keyRow(["z","x","c","v","b","n","m"])
-                    specialKey("\u{232b}", width: keySize * 1.3) {
+                    specialKey("\u{232b}", width: letterEdgeKeyWidth) {
                         inputVC.textDocumentProxy.deleteBackward()
                         if !keyboardTypedText.isEmpty { keyboardTypedText.removeLast() }
                     }
@@ -569,7 +558,7 @@ struct KeyboardView: View {
             Button { rewrite(style: "Rewrite") } label: {
                 HStack(spacing: 3) {
                     if isRewriting { ProgressView().scaleEffect(0.6).tint(.white) }
-                    else { Text("✦").font(.system(size: 12)) }
+                    else { Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 12)) }
                     Text(isRewriting ? "…" : "Rewrite")
                         .font(.system(size: 11, weight: .bold)).lineLimit(1)
                 }
@@ -741,8 +730,6 @@ struct KeyboardView: View {
         level = ["Light", "Medium", "Strong"].contains(stored) ? stored : "Medium"
         spiralEnabled = defaults?.object(forKey: "spiralPauseEnabled") == nil
             ? true : (defaults?.bool(forKey: "spiralPauseEnabled") ?? true)
-        showExpl = defaults?.object(forKey: "showExplanation") == nil
-            ? true : (defaults?.bool(forKey: "showExplanation") ?? true)
         teachingBody = defaults?.string(forKey: "lastClarityTeachingNote") ?? ""
     }
 
@@ -760,7 +747,7 @@ struct KeyboardView: View {
         let before     = proxy.documentContextBeforeInput ?? ""
         let typedText  = keyboardTypedText.trimmingCharacters(in: .whitespacesAndNewlines)
         let cursorText = before.trimmingCharacters(in: .whitespacesAndNewlines)
-        let shouldUseTypedText = !typedText.isEmpty && (cursorText.isEmpty || before.hasSuffix(keyboardTypedText))
+        let shouldUseTypedText = !typedText.isEmpty && (cursorText.isEmpty || keyboardTypedText.hasSuffix(before))
         let full          = shouldUseTypedText ? typedText  : cursorText
         let totalToDelete = shouldUseTypedText ? keyboardTypedText.count : before.count
 
@@ -771,8 +758,8 @@ struct KeyboardView: View {
         showStatus("Sending \(full.count) chars\u{2026}")
         isRewriting = true
         previewText = ""
+        previewGrammar = ""
         pendingDeleteCount = 0
-        explanation = ""
         showSpiral = false
         defaults?.set(true, forKey: "keyboardRewriteInProgress")
         defaults?.synchronize()
@@ -786,20 +773,18 @@ struct KeyboardView: View {
                     defaults?.synchronize()
                     pendingDeleteCount = totalToDelete
                     previewText = result.rewrite
+                    previewGrammar = result.grammarOnly
+
+                    let note = result.explanation.isEmpty ? "Rewritten at \(level) for \(activeProfiles)." : result.explanation
+                    teachingBody = note
+                    defaults?.set(note, forKey: "lastClarityTeachingNote")
+                    incrementMetric("keyboard.clarity.rewrite.success")
+                    saveLog(original: full, result: result)
 
                     if spiralEnabled && result.isSpiraling {
-                        spiralNT            = result.rewrite
-                        spiralGrammar       = result.grammarOnly
-                        spiralOriginal      = full
-                        spiralOriginalCount = totalToDelete
                         withAnimation { showSpiral = true }
                     } else {
-                        let note = result.explanation.isEmpty ? "Rewritten at \(level) for \(activeProfiles)." : result.explanation
-                        teachingBody = note
-                        defaults?.set(note, forKey: "lastClarityTeachingNote")
-                        incrementMetric("keyboard.clarity.rewrite.success")
                         showStatus("Review the rewrite above \u{2191}")
-                        saveLog(original: full, result: result)
                     }
                 }
             } catch {
@@ -814,9 +799,8 @@ struct KeyboardView: View {
         }
     }
 
-    private func applyPreview() {
-        guard !previewText.isEmpty else { return }
-        let text = previewText
+    private func applyPreview(_ text: String) {
+        guard !text.isEmpty else { return }
         let deleteCount = pendingDeleteCount
         defaults?.set(true, forKey: "keyboardRewriteInProgress")
         defaults?.synchronize()
@@ -829,6 +813,7 @@ struct KeyboardView: View {
                 defaults?.set(false, forKey: "keyboardRewriteInProgress")
                 defaults?.synchronize()
                 previewText = ""
+                previewGrammar = ""
                 pendingDeleteCount = 0
                 showSpiral = false
                 showStatus("Applied \u{2713}")
