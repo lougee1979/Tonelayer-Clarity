@@ -9,11 +9,16 @@ func hasAcceptedClarityAgreement() -> Bool {
 
 struct ClarityAgreementGate: View {
     @State private var accepted = false
+    @State private var showTradeSecretSetup = false
     @State private var showApp  = false
 
     var body: some View {
         if showApp {
             ContentView()
+        } else if showTradeSecretSetup {
+            TradeSecretSetupView {
+                withAnimation(.easeInOut(duration: 0.3)) { showApp = true }
+            }
         } else {
             agreementScreen
         }
@@ -73,7 +78,13 @@ struct ClarityAgreementGate: View {
                     Button {
                         guard accepted else { return }
                         UserDefaults(suiteName: clarityAppGroupID)?.set(true, forKey: clarityAgreementKey)
-                        withAnimation(.easeInOut(duration: 0.3)) { showApp = true }
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            if CustomTermsStore.hasSeenSetup {
+                                showApp = true
+                            } else {
+                                showTradeSecretSetup = true
+                            }
+                        }
                     } label: {
                         Text("Enter Clarity")
                             .font(.system(size: 16, weight: .bold))

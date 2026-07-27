@@ -8,6 +8,29 @@ import Combine
 import Speech
 import AVFoundation
 
+/// The speech-bubble shape behind a key's press-preview popup. Was
+/// referenced by `letterKey` without ever being defined in this target —
+/// a pre-existing build break unrelated to any redaction/keyboard work in
+/// this session, just never caught because this target hadn't been built
+/// standalone recently. Mirrors ToneLayer iOS's identical shape.
+struct KeyPopupBubble: Shape {
+    func path(in rect: CGRect) -> Path {
+        let cornerRadius: CGFloat = 8
+        let tailWidth: CGFloat = 16
+        let tailHeight: CGFloat = 7
+        let bodyRect = CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height - tailHeight)
+
+        var path = Path(roundedRect: bodyRect, cornerRadius: cornerRadius, style: .continuous)
+        var tail = Path()
+        tail.move(to: CGPoint(x: rect.midX - tailWidth / 2, y: bodyRect.maxY))
+        tail.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
+        tail.addLine(to: CGPoint(x: rect.midX + tailWidth / 2, y: bodyRect.maxY))
+        tail.closeSubpath()
+        path.addPath(tail)
+        return path
+    }
+}
+
 // MARK: - Dictation
 
 @MainActor
@@ -1096,7 +1119,7 @@ struct KeyboardView: View {
                     if spiralEnabled && result.isSpiraling {
                         withAnimation { showSpiral = true }
                     } else {
-                        showStatus("Review the rewrite above \u{2191}")
+                        showStatus(result.redactionNotice ?? "Review the rewrite above \u{2191}")
                     }
                 }
             } catch {
@@ -1181,19 +1204,22 @@ struct KeyboardView: View {
         let explanation: String
         let distortions: [String]
         let grammarOnly: String
+        let redactionNotice: String?
         var isSpiraling: Bool { !distortions.isEmpty }
     }
 
     private func callServer(text: String, style: String = "Clarify") async throws -> ClaudeResult {
         let mode = "clarity"
         let profile = activeProfiles
+        let redactor = PIIRedactor()
+        let (redactedText, mapping, flaggedKinds) = redactor.redact(text)
         var req = URLRequest(url: URL(string: serverURL)!)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue(appToken,           forHTTPHeaderField: "x-app-token")
         req.timeoutInterval = 90
         req.httpBody = try JSONSerialization.data(withJSONObject: [
-            "text":    text,
+            "text":    redactedText,
             "profile": profile,
             "level":   level,
             "mode":    mode,
@@ -1221,10 +1247,11 @@ struct KeyboardView: View {
             throw NBError.badResponse
         }
         return ClaudeResult(
-            rewrite:     rewrite,
-            explanation: parsed["teaching_explanation"] as? String ?? parsed["explanation"] as? String ?? "",
+            rewrite:     redactor.rehydrate(rewrite, mapping: mapping),
+            explanation: redactor.rehydrate(parsed["teaching_explanation"] as? String ?? parsed["explanation"] as? String ?? "", mapping: mapping),
             distortions: parsed["distortions"] as? [String] ?? [],
-            grammarOnly: parsed["grammar_only"] as? String ?? ""
+            grammarOnly: redactor.rehydrate(parsed["grammar_only"] as? String ?? "", mapping: mapping),
+            redactionNotice: PIIRedactor.friendlyNotice(for: flaggedKinds)
         )
     }
 

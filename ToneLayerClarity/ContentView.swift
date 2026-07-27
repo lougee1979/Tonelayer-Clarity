@@ -787,7 +787,7 @@ struct ContentView: View {
                     teachingExplanation = result.teachingExplanation
                     incrementMetric("rewrite.success")
                     isRewriting = false
-                    status = "Ready"
+                    status = result.redactionNotice ?? "Ready"
                 }
             } catch {
                 await MainActor.run {
@@ -805,9 +805,13 @@ struct ContentView: View {
         let changeNotes: String
         let learningTakeaway: String
         let teachingExplanation: String
+        let redactionNotice: String?
     }
 
     private func callServer(text: String) async throws -> ClarityResult {
+        let redactor = PIIRedactor()
+        let (redactedText, mapping, flaggedKinds) = redactor.redact(text)
+
         var req = URLRequest(url: URL(string: serverURL)!)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -815,7 +819,7 @@ struct ContentView: View {
         req.timeoutInterval = 90
         let direction = messageDirection == "I'm about to send this" ? "outgoing" : "incoming"
         req.httpBody = try JSONSerialization.data(withJSONObject: [
-            "text": text, "profile": buildProfileString(), "level": goal, "mode": "clarity", "style": "Clarify",
+            "text": redactedText, "profile": buildProfileString(), "level": goal, "mode": "clarity", "style": "Clarify",
             "direction": direction
         ])
         let (data, response) = try await URLSession.shared.data(for: req)
@@ -833,11 +837,12 @@ struct ContentView: View {
         else if let r = parsed["rewrite"] as? String, !r.isEmpty { clearer = r }
         else { throw ClarityError.badResponse }
         return ClarityResult(
-            clearerVersion:      clearer,
-            interpretationRisk:  parsed["interpretation_risk"]  as? String ?? "",
-            changeNotes:         parsed["change_notes"]         as? String ?? "",
-            learningTakeaway:    parsed["learning_takeaway"]    as? String ?? "",
-            teachingExplanation: parsed["teaching_explanation"] as? String ?? parsed["explanation"] as? String ?? ""
+            clearerVersion:      redactor.rehydrate(clearer, mapping: mapping),
+            interpretationRisk:  redactor.rehydrate(parsed["interpretation_risk"]  as? String ?? "", mapping: mapping),
+            changeNotes:         redactor.rehydrate(parsed["change_notes"]         as? String ?? "", mapping: mapping),
+            learningTakeaway:    redactor.rehydrate(parsed["learning_takeaway"]    as? String ?? "", mapping: mapping),
+            teachingExplanation: redactor.rehydrate(parsed["teaching_explanation"] as? String ?? parsed["explanation"] as? String ?? "", mapping: mapping),
+            redactionNotice:     PIIRedactor.friendlyNotice(for: flaggedKinds)
         )
     }
 
@@ -979,7 +984,7 @@ struct ContentView: View {
             do {
                 let result = try await callDecode(text: text)
                 await MainActor.run {
-                    isDecoding = false; decodeStatus = ""
+                    isDecoding = false; decodeStatus = result.redactionNotice ?? ""
                     decodeTranslation = result.translation; decodePatterns = result.patterns
                     decodeCommStyle = result.commStyle; decodeBaseline = result.baseline; decodeTentative = result.tentative
                     let contact = decodeContactName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -995,35 +1000,42 @@ struct ContentView: View {
         }
     }
 
-    private struct DecodeResult { let translation: String; let patterns: [String]; let commStyle: String; let baseline: String; let tentative: Bool }
+    private struct DecodeResult { let translation: String; let patterns: [String]; let commStyle: String; let baseline: String; let tentative: Bool; let redactionNotice: String? }
 
     private func callDecode(text: String) async throws -> DecodeResult {
         let contact = decodeContactName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let history = ClarityDecodeStore.shared.messages(for: contact)
+        let history = ClarityDecodeStore.shared.messages(for: contact).suffix(10)
+
+        let redactor = PIIRedactor()
+        let allTexts = [text] + history.map { $0.text }
+        let (redactedTexts, mapping, flaggedKinds) = redactor.redactMultiple(allTexts)
+        let redactedText = redactedTexts[0]
+        let redactedHistory = zip(Array(history), redactedTexts.dropFirst())
+
         var req = URLRequest(url: URL(string: decodeURL)!)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue(appToken, forHTTPHeaderField: "x-app-token")
         req.timeoutInterval = 90
         req.httpBody = try JSONSerialization.data(withJSONObject: [
-            "text": text, "contact": contact.isEmpty ? "Unknown" : contact,
+            "text": redactedText, "contact": contact.isEmpty ? "Unknown" : contact,
             "sensitivity": decodeSensitivity,
             "senderProfile": decodeSenderProfileString(),
-            "history": history.suffix(10).map { ["text": $0.text, "patterns": $0.patterns] }
+            "history": redactedHistory.map { ["text": $0.1, "patterns": $0.0.patterns] }
         ])
         let (data, response) = try await URLSession.shared.data(for: req)
         guard let http = response as? HTTPURLResponse else { throw ClarityError.apiFailed(0) }
         if http.statusCode != 200 { throw ClarityError.apiFailed(http.statusCode) }
         guard let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { throw ClarityError.badResponse }
-        let translation = parsed["translation"] as? String ?? parsed["summary"] as? String ?? parsed["analysis"] as? String ?? ""
+        let translation = redactor.rehydrate(parsed["translation"] as? String ?? parsed["summary"] as? String ?? parsed["analysis"] as? String ?? "", mapping: mapping)
         guard !translation.isEmpty else { throw ClarityError.badResponse }
         let patterns = parsed["flags"] as? [String] ?? parsed["patterns"] as? [String] ?? []
-        let commStyle = parsed["communication_style"] as? String ?? ""
-        let baseline = parsed["baseline_note"] as? String ?? parsed["baseline"] as? String ?? parsed["note"] as? String ?? ""
+        let commStyle = redactor.rehydrate(parsed["communication_style"] as? String ?? "", mapping: mapping)
+        let baseline = redactor.rehydrate(parsed["baseline_note"] as? String ?? parsed["baseline"] as? String ?? parsed["note"] as? String ?? "", mapping: mapping)
         let isDefinitive = parsed["is_definitive"] as? Bool ?? true
         let tentative = !isDefinitive || baseline.lowercased().contains("building")
-        return DecodeResult(translation: translation, patterns: patterns, commStyle: commStyle, baseline: baseline, tentative: tentative)
+        return DecodeResult(translation: translation, patterns: patterns, commStyle: commStyle, baseline: baseline, tentative: tentative, redactionNotice: PIIRedactor.friendlyNotice(for: flaggedKinds))
     }
 }
 
