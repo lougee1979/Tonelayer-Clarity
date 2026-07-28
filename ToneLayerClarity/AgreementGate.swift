@@ -110,7 +110,7 @@ struct ClarityAgreementGate: View {
     private let agreementText = """
 Clarity Beta Testing Agreement
 
-Last updated: June 2026
+Last updated: July 2026
 
 Thank you for testing ToneLayer Clarity. This agreement covers the ToneLayer Clarity app and the ToneLayer Clarity keyboard extension. By accepting and entering the app you agree to the following.
 
@@ -127,7 +127,7 @@ ToneLayer Clarity is beta software. Features may change, crash, or produce unexp
 ToneLayer Clarity is a communication aid. It is not a medical device, therapy tool, diagnostic service, or source of legal advice. It does not provide clinical, psychological, or legal guidance. If you need professional support, please speak with a qualified professional.
 
 5. YOUR TEXT IS PROCESSED ON OUR SERVER
-Messages you type in the app or keyboard are sent to tonelayer.app for AI processing. Your text is not permanently stored on the server. Do not enter sensitive personal information such as passwords, financial data, or private medical details. By using ToneLayer Clarity you consent to this processing.
+Before anything leaves your device, the app automatically strips names, phone numbers, addresses, dates, bank account numbers, crypto wallet addresses/private keys/seed phrases, API keys, and any business or trade-secret terms you've added yourself — replacing each with a placeholder. Only the placeholder-substituted text is sent to tonelayer.app for AI processing; the real values are restored on your device once a response returns and are never transmitted or stored. Your text is not permanently stored on the server. This protection is automatic, but it is not a guarantee against every possible leak — stay careful with what you share and who you share it with. By using ToneLayer Clarity you consent to this processing.
 
 6. FEEDBACK
 As a beta tester you agree to report bugs, usability issues, and unexpected behavior using the feedback option in the app. Your feedback directly improves the app.
